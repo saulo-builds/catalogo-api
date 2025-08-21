@@ -5,7 +5,8 @@ from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, F
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import OperationalError, IntegrityError
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+import re # Importa o módulo de expressões regulares
 from typing import List, Optional
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -68,6 +69,18 @@ class FornecedorBase(BaseModel):
     nome: str
     contato_telefone: Optional[str] = None
     contato_email: Optional[str] = None
+
+    # Validador para o campo de telefone
+    @field_validator('contato_telefone')
+    def validar_telefone(cls, v):
+        if v is None:
+            return v
+        # Expressão regular para validar formatos de telefone brasileiros
+        # Ex: (11) 98765-4321, 11987654321, etc.
+        regex = re.compile(r'^\(?\d{2}\)?[\s-]?\d{4,5}-?\d{4}$')
+        if not regex.match(v):
+            raise ValueError('Número de telefone inválido.')
+        return v
 
 # --- Configuração do Banco de Dados ---
 DATABASE_URL_ENV = os.getenv("DATABASE_URL")
