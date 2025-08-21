@@ -102,10 +102,13 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 
-# --- Endpoint Principal para servir o Frontend ---
+# --- Endpoint Principal para servir o Frontend (MODIFICADO PARA TESTE) ---
 @app.get("/")
 def ler_raiz():
-    return FileResponse(os.path.join(BASE_DIR, 'index.html'))
+    """
+    Endpoint de teste para verificar se a aplicação está no ar.
+    """
+    return {"status": "A API está a funcionar corretamente!"}
 
 
 # --- Endpoints de Marcas ---
