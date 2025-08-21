@@ -11,9 +11,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 
-# --- Definição de Caminhos ---
+# --- Definição de Caminhos (MAIS ROBUSTO) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIRECTORY = os.path.join(BASE_DIR, "static/images/")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+UPLOAD_DIRECTORY = os.path.join(STATIC_DIR, "images/")
 
 # --- Cria a pasta de uploads se não existir ---
 if not os.path.exists(UPLOAD_DIRECTORY):
@@ -64,15 +65,12 @@ class EstoqueVariacaoResponse(BaseModel):
     modelo_celular: str
 
 # --- Configuração do Banco de Dados ---
-# Pega a URL do banco de dados da variável de ambiente (para o Render)
 DATABASE_URL_ENV = os.getenv("DATABASE_URL")
 
 if DATABASE_URL_ENV and DATABASE_URL_ENV.startswith("postgres://"):
-    # Converte a URL do Render (postgres://) para o formato que o SQLAlchemy entende (postgresql://)
     DATABASE_URL = DATABASE_URL_ENV.replace("postgres://", "postgresql://", 1)
     print("A usar a base de dados PostgreSQL do Render.")
 else:
-    # Se não encontrar a variável de ambiente, usa a URL do banco de dados local (XAMPP)
     DATABASE_URL = "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
     print("A usar a base de dados local MariaDB/MySQL.")
 
@@ -80,7 +78,6 @@ else:
 try:
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    # Testa a conexão para garantir que está tudo bem
     with engine.connect() as connection:
         print("Conexão com o banco de dados estabelecida com sucesso!")
 except Exception as e:
@@ -98,17 +95,17 @@ def get_db():
 # --- Início da Aplicação FastAPI ---
 app = FastAPI()
 
-# --- Montar diretório estático para servir as imagens ---
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+# --- Montar diretório estático para servir as imagens (MAIS ROBUSTO) ---
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-# --- Endpoint Principal para servir o Frontend (MODIFICADO PARA TESTE) ---
+# --- Endpoint Principal para servir o Frontend (CORRIGIDO) ---
 @app.get("/")
 def ler_raiz():
     """
-    Endpoint de teste para verificar se a aplicação está no ar.
+    Este endpoint serve a página principal do painel administrativo.
     """
-    return {"status": "A API está a funcionar corretamente!"}
+    return FileResponse(os.path.join(BASE_DIR, 'index.html'))
 
 
 # --- Endpoints de Marcas ---
