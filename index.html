@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Gestão - Catálogo Inteligente</title>
+    <!-- Link para o CSS do Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Ícones do Bootstrap -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+<body class="bg-light">
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Catálogo Admin</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-marcas" href="#" onclick="alternarMenu('marcas')">Marcas</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-modelos" href="#" onclick="alternarMenu('modelos')">Modelos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-produtos" href="#" onclick="alternarMenu('produtos')">Produtos</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- O conteúdo dinâmico será carregado aqui -->
+        <div id="conteudo-principal">
+            <h1>Bem-vindo ao Painel de Gestão!</h1>
+            <p>Selecione uma opção no menu acima para começar.</p>
+        </div>
+    </div>
+
+    <!-- Modals de Edição (Marca, Modelo, Produto) -->
+    <div class="modal fade" id="editMarcaModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Editar Marca</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form><input type="hidden" id="edit-marca-id"><div class="mb-3"><label for="edit-marca-nome" class="form-label">Nome da Marca</label><input type="text" class="form-control" id="edit-marca-nome" required></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarEdicaoMarca()">Salvar</button></div></div></div></div>
+    <div class="modal fade" id="editModeloModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Editar Modelo</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form><input type="hidden" id="edit-modelo-id"><div class="mb-3"><label for="edit-modelo-marca-select" class="form-label">Marca</label><select id="edit-modelo-marca-select" class="form-select" required></select></div><div class="mb-3"><label for="edit-modelo-nome" class="form-label">Nome do Modelo</label><input type="text" class="form-control" id="edit-modelo-nome" required></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarEdicaoModelo()">Salvar</button></div></div></div></div>
+    <div class="modal fade" id="editProdutoModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Editar Produto</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form><input type="hidden" id="edit-produto-id"><div class="row"><div class="col-md-8 mb-3"><label for="edit-produto-nome" class="form-label">Nome</label><input type="text" class="form-control" id="edit-produto-nome" required></div><div class="col-md-4 mb-3"><label for="edit-produto-modelo-select" class="form-label">Modelo</label><select id="edit-produto-modelo-select" class="form-select" required></select></div></div><div class="row"><div class="col-md-4 mb-3"><label for="edit-produto-tipo" class="form-label">Tipo</label><input type="text" class="form-control" id="edit-produto-tipo" required></div><div class="col-md-4 mb-3"><label for="edit-produto-material" class="form-label">Material</label><input type="text" class="form-control" id="edit-produto-material"></div></div><div class="row"><div class="col-md-4 mb-3"><label for="edit-produto-preco-venda" class="form-label">Preço Venda</label><input type="number" step="0.01" class="form-control" id="edit-produto-preco-venda" required></div><div class="col-md-4 mb-3"><label for="edit-produto-preco-custo" class="form-label">Preço Custo</label><input type="number" step="0.01" class="form-control" id="edit-produto-preco-custo"></div></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarEdicaoProduto()">Salvar</button></div></div></div></div>
+
+    <!-- Modal de Gestão de Estoque -->
+    <div class="modal fade" id="estoqueModal" tabindex="-1" aria-labelledby="estoqueModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="estoqueModalLabel">Gerir Estoque do Produto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 id="estoque-produto-titulo"></h6>
+                    <div class="card mb-4">
+                        <div class="card-header">Adicionar Nova Variação</div>
+                        <div class="card-body">
+                            <form id="form-adicionar-variacao" onsubmit="adicionarVariacao(event)">
+                                <input type="hidden" id="estoque-produto-id">
+                                <div class="row align-items-end">
+                                    <div class="col-md-3"><label class="form-label">Cor</label><input type="text" id="estoque-cor" class="form-control" required></div>
+                                    <div class="col-md-2"><label class="form-label">Quantidade</label><input type="number" id="estoque-quantidade" class="form-control" required></div>
+                                    <div class="col-md-4"><label class="form-label">Foto</label><input type="file" id="estoque-foto" class="form-control"></div>
+                                    <div class="col-md-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="estoque-encomenda" checked><label class="form-check-label">P/ Encomenda</label></div></div>
+                                    <div class="col-md-1"><button type="submit" class="btn btn-primary w-100">Add</button></div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">Variações Existentes</div>
+                        <div class="card-body" id="tabela-estoque-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOVO: Modal de Edição de Variação de Estoque -->
+    <div class="modal fade" id="editVariacaoModal" tabindex="-1" aria-labelledby="editVariacaoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editVariacaoModalLabel">Editar Variação de Estoque</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-editar-variacao" onsubmit="salvarEdicaoVariacao(event)">
+                        <input type="hidden" id="edit-variacao-id">
+                        <input type="hidden" id="edit-variacao-produto-id">
+                        <input type="hidden" id="edit-variacao-produto-nome">
+                        <div class="row align-items-end">
+                            <div class="col-md-3"><label class="form-label">Cor</label><input type="text" id="edit-estoque-cor" class="form-control" required></div>
+                            <div class="col-md-2"><label class="form-label">Quantidade</label><input type="number" id="edit-estoque-quantidade" class="form-control" required></div>
+                            <div class="col-md-5"><label class="form-label">Nova Foto (Opcional)</label><input type="file" id="edit-estoque-foto" class="form-control"></div>
+                            <div class="col-md-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="edit-estoque-encomenda"><label class="form-check-label">P/ Encomenda</label></div></div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="form-editar-variacao" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link para o JavaScript do Bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Nosso JavaScript -->
+    <script>
+        let todasAsMarcas = [], todosOsModelos = [], todosOsProdutos = [], variacoesAtuais = [];
+
+        function alternarMenu(secao) {
+            document.querySelectorAll('.navbar-nav .nav-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(`nav-${secao}`).classList.add('active');
+            if (secao === 'marcas') mostrarGerenciamentoMarcas();
+            else if (secao === 'modelos') mostrarGerenciamentoModelos();
+            else if (secao === 'produtos') mostrarGerenciamentoProdutos();
+        }
+
+        function mostrarCarregamento(elementoId = 'conteudo-principal') {
+            document.getElementById(elementoId).innerHTML = '<div class="d-flex justify-content-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        }
+
+        // --- GESTÃO DE MARCAS (sem alterações) ---
+        async function mostrarGerenciamentoMarcas() {
+            mostrarCarregamento();
+            try {
+                const response = await fetch('/marcas');
+                if (!response.ok) throw new Error('Falha ao carregar marcas.');
+                const marcas = await response.json();
+                todasAsMarcas = marcas;
+                let html = `<h2>Gerir Marcas</h2><div class="card mb-4"><div class="card-header">Adicionar Nova Marca</div><div class="card-body"><form onsubmit="adicionarMarca(event)"><div class="input-group"><input type="text" id="nome-marca-input" class="form-control" placeholder="Nome da marca" required><button type="submit" class="btn btn-primary">Adicionar</button></div></form></div></div><div class="card"><div class="card-header">Marcas Existentes</div><div class="card-body"><table class="table table-striped table-hover"><thead><tr><th>ID</th><th>Nome</th><th class="text-end">Ações</th></tr></thead><tbody>
+                    ${marcas.map(m => `<tr id="marca-${m.id}"><td>${m.id}</td><td>${m.nome}</td><td class="text-end"><button class="btn btn-sm btn-warning" onclick="editarMarca(${m.id},'${m.nome}')"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-danger" onclick="apagarMarca(${m.id})"><i class="bi bi-trash"></i></button></td></tr>`).join('')}
+                    </tbody></table></div></div>`;
+                document.getElementById('conteudo-principal').innerHTML = html;
+            } catch (e) { document.getElementById('conteudo-principal').innerHTML = `<p class="text-danger">Erro: ${e.message}</p>`; }
+        }
+        async function adicionarMarca(event) {
+            event.preventDefault();
+            const input = document.getElementById('nome-marca-input');
+            try {
+                const response = await fetch('/marcas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: input.value }) });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                input.value = '';
+                mostrarGerenciamentoMarcas();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+        function editarMarca(id, nome) {
+            document.getElementById('edit-marca-id').value = id;
+            document.getElementById('edit-marca-nome').value = nome;
+            new bootstrap.Modal(document.getElementById('editMarcaModal')).show();
+        }
+        async function salvarEdicaoMarca() {
+            const id = document.getElementById('edit-marca-id').value;
+            const nome = document.getElementById('edit-marca-nome').value;
+            try {
+                const response = await fetch(`/marcas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome }) });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                bootstrap.Modal.getInstance(document.getElementById('editMarcaModal')).hide();
+                mostrarGerenciamentoMarcas();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+        async function apagarMarca(id) {
+            if (!confirm(`Tem a certeza?`)) return;
+            try {
+                const response = await fetch(`/marcas/${id}`, { method: 'DELETE' });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                document.getElementById(`marca-${id}`)?.remove();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+
+        // --- GESTÃO DE MODELOS (sem alterações) ---
+        async function mostrarGerenciamentoModelos() {
+            mostrarCarregamento();
+            try {
+                const [resModelos, resMarcas] = await Promise.all([fetch('/modelos'), fetch('/marcas')]);
+                if (!resModelos.ok) throw new Error('Falha ao carregar modelos.');
+                if (!resMarcas.ok) throw new Error('Falha ao carregar marcas.');
+                const modelos = await resModelos.json();
+                const marcas = await resMarcas.json();
+                todasAsMarcas = marcas;
+                todosOsModelos = modelos;
+                const optsMarcas = marcas.map(m => `<option value="${m.id}">${m.nome}</option>`).join('');
+                let html = `<h2>Gerir Modelos</h2><div class="card mb-4"><div class="card-header">Adicionar Modelo</div><div class="card-body"><form onsubmit="adicionarModelo(event)"><div class="row g-3 align-items-end"><div class="col-md-5"><label class="form-label">Marca</label><select id="id-marca-select" class="form-select" required><option value="" selected disabled>Selecione</option>${optsMarcas}</select></div><div class="col-md-5"><label class="form-label">Nome do Modelo</label><input type="text" id="nome-modelo-input" class="form-control" required></div><div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Adicionar</button></div></div></form></div></div>
+                    <div class="card"><div class="card-header">Modelos Existentes</div><div class="card-body"><table class="table table-striped table-hover"><thead><tr><th>ID</th><th>Modelo</th><th>Marca</th><th class="text-end">Ações</th></tr></thead><tbody>
+                    ${modelos.map(m => `<tr id="modelo-${m.id}"><td>${m.id}</td><td>${m.nome_modelo}</td><td>${m.marca_nome}</td><td class="text-end"><button class="btn btn-sm btn-warning" onclick="editarModelo(${m.id},'${m.nome_modelo.replace(/'/g, "\\'")}','${m.marca_nome}')"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-danger" onclick="apagarModelo(${m.id})"><i class="bi bi-trash"></i></button></td></tr>`).join('')}
+                    </tbody></table></div></div>`;
+                document.getElementById('conteudo-principal').innerHTML = html;
+            } catch (e) { document.getElementById('conteudo-principal').innerHTML = `<p class="text-danger">Erro: ${e.message}</p>`; }
+        }
+        async function adicionarModelo(event) {
+            event.preventDefault();
+            const payload = { nome_modelo: document.getElementById('nome-modelo-input').value, id_marca: parseInt(document.getElementById('id-marca-select').value) };
+            try {
+                const response = await fetch('/modelos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                mostrarGerenciamentoModelos();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+        function editarModelo(id, nome, marcaNome) {
+            const selMarcas = document.getElementById('edit-modelo-marca-select');
+            selMarcas.innerHTML = todasAsMarcas.map(m => `<option value="${m.id}">${m.nome}</option>`).join('');
+            const marcaDoModelo = todasAsMarcas.find(m => m.nome === marcaNome);
+            if (marcaDoModelo) selMarcas.value = marcaDoModelo.id;
+            document.getElementById('edit-modelo-id').value = id;
+            document.getElementById('edit-modelo-nome').value = nome;
+            new bootstrap.Modal(document.getElementById('editModeloModal')).show();
+        }
+        async function salvarEdicaoModelo() {
+            const id = document.getElementById('edit-modelo-id').value;
+            const payload = { nome_modelo: document.getElementById('edit-modelo-nome').value, id_marca: parseInt(document.getElementById('edit-modelo-marca-select').value) };
+            try {
+                const response = await fetch(`/modelos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                bootstrap.Modal.getInstance(document.getElementById('editModeloModal')).hide();
+                mostrarGerenciamentoModelos();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+        async function apagarModelo(id) {
+            if (!confirm(`Tem a certeza?`)) return;
+            try {
+                const response = await fetch(`/modelos/${id}`, { method: 'DELETE' });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                document.getElementById(`modelo-${id}`)?.remove();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+
+        // --- GESTÃO DE PRODUTOS (sem alterações) ---
+        async function mostrarGerenciamentoProdutos() {
+            mostrarCarregamento();
+            try {
+                const [resProds, resModelos] = await Promise.all([fetch('/produtos'), fetch('/modelos')]);
+                if (!resProds.ok) throw new Error('Falha ao carregar produtos.');
+                if (!resModelos.ok) throw new Error('Falha ao carregar modelos.');
+                const produtos = await resProds.json();
+                const modelos = await resModelos.json();
+                todosOsProdutos = produtos;
+                todosOsModelos = modelos;
+                const optsModelos = modelos.map(m => `<option value="${m.id}">${m.marca_nome} ${m.nome_modelo}</option>`).join('');
+                let html = `<h2>Gerir Produtos</h2><div class="card mb-4"><div class="card-header">Adicionar Produto</div><div class="card-body"><form onsubmit="adicionarProduto(event)"><div class="row"><div class="col-md-8 mb-3"><label class="form-label">Nome</label><input type="text" id="produto-nome" class="form-control" required></div><div class="col-md-4 mb-3"><label class="form-label">Modelo</label><select id="produto-modelo-select" class="form-select" required><option value="" selected disabled>Selecione</option>${optsModelos}</select></div></div><div class="row"><div class="col-md-4 mb-3"><label class="form-label">Tipo</label><input type="text" id="produto-tipo" class="form-control" required></div><div class="col-md-4 mb-3"><label class="form-label">Material</label><input type="text" id="produto-material" class="form-control"></div></div><div class="row"><div class="col-md-4 mb-3"><label class="form-label">Preço Venda</label><input type="number" step="0.01" id="produto-preco-venda" class="form-control" required></div><div class="col-md-4 mb-3"><label class="form-label">Preço Custo</label><input type="number" step="0.01" id="produto-preco-custo" class="form-control"></div><div class="col-md-4 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100">Adicionar</button></div></div></form></div></div>
+                    <div class="card"><div class="card-header">Produtos Existentes</div><div class="card-body"><table class="table table-striped table-hover"><thead><tr><th>ID</th><th>Produto</th><th>Tipo</th><th>Modelo</th><th>Preço</th><th class="text-end">Ações</th></tr></thead><tbody>
+                    ${produtos.map(p => `<tr id="produto-${p.id}"><td>${p.id}</td><td>${p.nome}</td><td>${p.tipo}</td><td>${p.modelo_celular}</td><td>R$ ${p.preco_venda.toFixed(2).replace('.',',')}</td><td class="text-end"><button class="btn btn-sm btn-info" onclick="mostrarGerenciamentoEstoque(${p.id}, '${p.nome.replace(/'/g, "\\'")}')"><i class="bi bi-box-seam"></i> Estoque</button> <button class="btn btn-sm btn-warning" onclick="editarProduto(${p.id})"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-danger" onclick="apagarProduto(${p.id})"><i class="bi bi-trash"></i></button></td></tr>`).join('')}
+                    </tbody></table></div></div>`;
+                document.getElementById('conteudo-principal').innerHTML = html;
+            } catch (e) { document.getElementById('conteudo-principal').innerHTML = `<p class="text-danger">Erro: ${e.message}</p>`; }
+        }
+        async function adicionarProduto(event) {
+            event.preventDefault();
+            const payload = { nome: document.getElementById('produto-nome').value, id_modelo_celular: parseInt(document.getElementById('produto-modelo-select').value), tipo: document.getElementById('produto-tipo').value, material: document.getElementById('produto-material').value || null, preco_venda: parseFloat(document.getElementById('produto-preco-venda').value), preco_custo: document.getElementById('produto-preco-custo').value ? parseFloat(document.getElementById('produto-preco-custo').value) : null };
+            try {
+                const response = await fetch('/produtos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                mostrarGerenciamentoProdutos();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+        async function editarProduto(id) {
+            const produto = todosOsProdutos.find(p => p.id === id);
+            if (!produto) return alert('Produto não encontrado!');
+            const modeloDoProduto = todosOsModelos.find(m => `${m.marca_nome} ${m.nome_modelo}` === produto.modelo_celular);
+            if (!modeloDoProduto) return alert('Modelo do produto não encontrado!');
+            const selModelos = document.getElementById('edit-produto-modelo-select');
+            selModelos.innerHTML = todosOsModelos.map(m => `<option value="${m.id}">${m.marca_nome} ${m.nome_modelo}</option>`).join('');
+            document.getElementById('edit-produto-id').value = produto.id;
+            document.getElementById('edit-produto-nome').value = produto.nome;
+            selModelos.value = modeloDoProduto.id;
+            document.getElementById('edit-produto-tipo').value = produto.tipo;
+            document.getElementById('edit-produto-material').value = produto.material || '';
+            document.getElementById('edit-produto-preco-venda').value = produto.preco_venda;
+            document.getElementById('edit-produto-preco-custo').value = '';
+            new bootstrap.Modal(document.getElementById('editProdutoModal')).show();
+        }
+        async function salvarEdicaoProduto() {
+            const id = document.getElementById('edit-produto-id').value;
+            const payload = { nome: document.getElementById('edit-produto-nome').value, id_modelo_celular: parseInt(document.getElementById('edit-produto-modelo-select').value), tipo: document.getElementById('edit-produto-tipo').value, material: document.getElementById('edit-produto-material').value || null, preco_venda: parseFloat(document.getElementById('edit-produto-preco-venda').value), preco_custo: document.getElementById('edit-produto-preco-custo').value ? parseFloat(document.getElementById('edit-produto-preco-custo').value) : null };
+            try {
+                const response = await fetch(`/produtos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                bootstrap.Modal.getInstance(document.getElementById('editProdutoModal')).hide();
+                mostrarGerenciamentoProdutos();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+        async function apagarProduto(id) {
+            if (!confirm(`Tem a certeza?`)) return;
+            try {
+                const response = await fetch(`/produtos/${id}`, { method: 'DELETE' });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                document.getElementById(`produto-${id}`)?.remove();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+
+        // --- GESTÃO DE ESTOQUE ---
+
+        async function mostrarGerenciamentoEstoque(produtoId, nomeProduto) {
+            const modalElement = document.getElementById('estoqueModal');
+            const modal = new bootstrap.Modal(modalElement);
+            document.getElementById('estoque-produto-titulo').innerText = `Produto: ${nomeProduto}`;
+            document.getElementById('estoque-produto-id').value = produtoId;
+            modal.show();
+            
+            const containerTabela = document.getElementById('tabela-estoque-container');
+            mostrarCarregamento('tabela-estoque-container');
+
+            try {
+                const response = await fetch(`/estoque/produto/${produtoId}`);
+                if (!response.ok) throw new Error('Falha ao carregar variações de estoque.');
+                const variacoes = await response.json();
+                variacoesAtuais = variacoes; // Guarda as variações para uso na edição
+
+                if (variacoes.length === 0) {
+                    containerTabela.innerHTML = '<p class="text-center">Nenhuma variação de estoque encontrada.</p>';
+                    return;
+                }
+
+                let tabelaHtml = `<table class="table table-sm table-striped table-hover"><thead><tr><th>ID</th><th>Foto</th><th>Cor</th><th>Qtd.</th><th>P/ Enc.</th><th class="text-end">Ações</th></tr></thead><tbody>
+                    ${variacoes.map(v => `<tr id="variacao-${v.id}"><td>${v.id}</td><td><img src="${v.url_foto || 'https://placehold.co/60x60/eee/ccc?text=S/Foto'}" alt="${v.cor}" width="40" height="40" class="rounded"></td><td>${v.cor}</td><td>${v.quantidade}</td><td>${v.disponivel_encomenda ? 'Sim' : 'Não'}</td><td class="text-end">
+                        <button class="btn btn-sm btn-warning" onclick="editarVariacao(${v.id}, ${produtoId}, '${nomeProduto.replace(/'/g, "\\'")}')"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="apagarVariacao(${v.id}, ${produtoId}, '${nomeProduto.replace(/'/g, "\\'")}')"><i class="bi bi-trash"></i></button>
+                    </td></tr>`).join('')}
+                    </tbody></table>`;
+                containerTabela.innerHTML = tabelaHtml;
+            } catch (error) {
+                containerTabela.innerHTML = `<p class="text-danger">Erro: ${error.message}</p>`;
+            }
+        }
+
+        async function adicionarVariacao(event) {
+            event.preventDefault();
+            const form = document.getElementById('form-adicionar-variacao');
+            const produtoId = document.getElementById('estoque-produto-id').value;
+            const formData = new FormData();
+            formData.append('id_produto', produtoId);
+            formData.append('cor', document.getElementById('estoque-cor').value);
+            formData.append('quantidade', document.getElementById('estoque-quantidade').value);
+            formData.append('disponivel_encomenda', document.getElementById('estoque-encomenda').checked);
+            const fotoInput = document.getElementById('estoque-foto');
+            if (fotoInput.files.length > 0) formData.append('foto', fotoInput.files[0]);
+
+            try {
+                const response = await fetch('/estoque', { method: 'POST', body: formData });
+                if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || 'Falha ao adicionar variação.'); }
+                form.reset();
+                const nomeProduto = document.getElementById('estoque-produto-titulo').innerText.replace('Produto: ', '');
+                mostrarGerenciamentoEstoque(produtoId, nomeProduto);
+            } catch (error) { alert(`Erro: ${error.message}`); }
+        }
+
+        async function apagarVariacao(variacaoId, produtoId, nomeProduto) {
+            if (!confirm(`Tem a certeza que deseja apagar a variação com ID ${variacaoId}?`)) return;
+            try {
+                const response = await fetch(`/estoque/${variacaoId}`, { method: 'DELETE' });
+                if (!response.ok) {
+                    try { const errorData = await response.json(); throw new Error(errorData.detail); } 
+                    catch (e) { throw new Error(`Falha ao apagar variação. Status: ${response.status}`); }
+                }
+                mostrarGerenciamentoEstoque(produtoId, nomeProduto);
+            } catch (error) { alert(`Erro: ${error.message}`); }
+        }
+
+        function editarVariacao(variacaoId, produtoId, nomeProduto) {
+            const variacao = variacoesAtuais.find(v => v.id === variacaoId);
+            if (!variacao) return alert('Variação não encontrada!');
+
+            document.getElementById('edit-variacao-id').value = variacao.id;
+            document.getElementById('edit-variacao-produto-id').value = produtoId;
+            document.getElementById('edit-variacao-produto-nome').value = nomeProduto;
+            document.getElementById('edit-estoque-cor').value = variacao.cor;
+            document.getElementById('edit-estoque-quantidade').value = variacao.quantidade;
+            document.getElementById('edit-estoque-encomenda').checked = variacao.disponivel_encomenda;
+            document.getElementById('edit-estoque-foto').value = ''; // Limpa o campo de ficheiro
+
+            new bootstrap.Modal(document.getElementById('editVariacaoModal')).show();
+        }
+
+        async function salvarEdicaoVariacao(event) {
+            event.preventDefault();
+            const variacaoId = document.getElementById('edit-variacao-id').value;
+            const produtoId = document.getElementById('edit-variacao-produto-id').value;
+            const nomeProduto = document.getElementById('edit-variacao-produto-nome').value;
+
+            const formData = new FormData();
+            formData.append('cor', document.getElementById('edit-estoque-cor').value);
+            formData.append('quantidade', document.getElementById('edit-estoque-quantidade').value);
+            formData.append('disponivel_encomenda', document.getElementById('edit-estoque-encomenda').checked);
+            
+            const fotoInput = document.getElementById('edit-estoque-foto');
+            if (fotoInput.files.length > 0) {
+                formData.append('foto', fotoInput.files[0]);
+            }
+
+            try {
+                // O método para enviar form-data com PUT é um pouco diferente,
+                // temos de usar POST e adicionar um campo _method='PUT' se a API o suportar,
+                // mas o FastAPI é inteligente e aceita o PUT diretamente com FormData.
+                const response = await fetch(`/estoque/${variacaoId}`, {
+                    method: 'PUT',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Falha ao atualizar variação.');
+                }
+                
+                bootstrap.Modal.getInstance(document.getElementById('editVariacaoModal')).hide();
+                mostrarGerenciamentoEstoque(produtoId, nomeProduto);
+
+            } catch (error) {
+                alert(`Erro: ${error.message}`);
+            }
+        }
+
+        // Carrega a gestão de marcas por defeito ao abrir a página
+        window.onload = () => alternarMenu('marcas');
+
+    </script>
+</body>
+</html>
