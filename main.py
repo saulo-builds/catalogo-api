@@ -64,6 +64,11 @@ class EstoqueVariacaoResponse(BaseModel):
     produto_nome: str
     modelo_celular: str
 
+class FornecedorBase(BaseModel):
+    nome: str
+    contato_telefone: Optional[str] = None
+    contato_email: Optional[str] = None
+
 # --- Configuração do Banco de Dados ---
 DATABASE_URL_ENV = os.getenv("DATABASE_URL")
 
@@ -480,3 +485,76 @@ def deletar_variacao_estoque(variacao_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao deletar variação: {e}")
+
+# --- Endpoints de Fornecedores ---
+
+@app.get("/fornecedores")
+def listar_fornecedores(db: Session = Depends(get_db)):
+    try:
+        query = text("SELECT id, nome, contato_telefone, contato_email FROM fornecedores ORDER BY nome")
+        resultado = db.execute(query).fetchall()
+        fornecedores = [
+            {"id": row[0], "nome": row[1], "contato_telefone": row[2], "contato_email": row[3]} 
+            for row in resultado
+        ]
+        return fornecedores
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar fornecedores: {e}")
+
+@app.post("/fornecedores", status_code=status.HTTP_201_CREATED)
+def criar_fornecedor(fornecedor: FornecedorBase, db: Session = Depends(get_db)):
+    try:
+        query = text("""
+            INSERT INTO fornecedores (nome, contato_telefone, contato_email) 
+            VALUES (:nome, :contato_telefone, :contato_email)
+        """)
+        db.execute(query, {
+            "nome": fornecedor.nome,
+            "contato_telefone": fornecedor.contato_telefone,
+            "contato_email": fornecedor.contato_email
+        })
+        db.commit()
+        return {"mensagem": f"Fornecedor '{fornecedor.nome}' criado com sucesso."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao criar fornecedor: {e}")
+
+@app.put("/fornecedores/{fornecedor_id}")
+def atualizar_fornecedor(fornecedor_id: int, fornecedor: FornecedorBase, db: Session = Depends(get_db)):
+    try:
+        query = text("""
+            UPDATE fornecedores SET 
+                nome = :nome, 
+                contato_telefone = :contato_telefone, 
+                contato_email = :contato_email 
+            WHERE id = :id
+        """)
+        resultado = db.execute(query, {
+            "nome": fornecedor.nome,
+            "contato_telefone": fornecedor.contato_telefone,
+            "contato_email": fornecedor.contato_email,
+            "id": fornecedor_id
+        })
+        if resultado.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Fornecedor não encontrado.")
+        db.commit()
+        return {"mensagem": f"Fornecedor ID {fornecedor_id} atualizado com sucesso."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar fornecedor: {e}")
+
+@app.delete("/fornecedores/{fornecedor_id}", status_code=status.HTTP_204_NO_CONTENT)
+def deletar_fornecedor(fornecedor_id: int, db: Session = Depends(get_db)):
+    try:
+        query = text("DELETE FROM fornecedores WHERE id = :id")
+        resultado = db.execute(query, {"id": fornecedor_id})
+        if resultado.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Fornecedor não encontrado.")
+        db.commit()
+        return
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Não é possível deletar o fornecedor, pois ele possui produtos vinculados.")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar fornecedor: {e}")

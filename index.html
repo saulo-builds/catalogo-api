@@ -28,6 +28,9 @@
                     <li class="nav-item">
                         <a class="nav-link" id="nav-produtos" href="#" onclick="alternarMenu('produtos')">Produtos</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-fornecedores" href="#" onclick="alternarMenu('fornecedores')">Fornecedores</a>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -41,80 +44,20 @@
         </div>
     </div>
 
-    <!-- Modals de Edição (Marca, Modelo, Produto) -->
+    <!-- Modals de Edição -->
     <div class="modal fade" id="editMarcaModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Editar Marca</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form><input type="hidden" id="edit-marca-id"><div class="mb-3"><label for="edit-marca-nome" class="form-label">Nome da Marca</label><input type="text" class="form-control" id="edit-marca-nome" required></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarEdicaoMarca()">Salvar</button></div></div></div></div>
     <div class="modal fade" id="editModeloModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Editar Modelo</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form><input type="hidden" id="edit-modelo-id"><div class="mb-3"><label for="edit-modelo-marca-select" class="form-label">Marca</label><select id="edit-modelo-marca-select" class="form-select" required></select></div><div class="mb-3"><label for="edit-modelo-nome" class="form-label">Nome do Modelo</label><input type="text" class="form-control" id="edit-modelo-nome" required></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarEdicaoModelo()">Salvar</button></div></div></div></div>
     <div class="modal fade" id="editProdutoModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Editar Produto</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form><input type="hidden" id="edit-produto-id"><div class="row"><div class="col-md-8 mb-3"><label for="edit-produto-nome" class="form-label">Nome</label><input type="text" class="form-control" id="edit-produto-nome" required></div><div class="col-md-4 mb-3"><label for="edit-produto-modelo-select" class="form-label">Modelo</label><select id="edit-produto-modelo-select" class="form-select" required></select></div></div><div class="row"><div class="col-md-4 mb-3"><label for="edit-produto-tipo" class="form-label">Tipo</label><input type="text" class="form-control" id="edit-produto-tipo" required></div><div class="col-md-4 mb-3"><label for="edit-produto-material" class="form-label">Material</label><input type="text" class="form-control" id="edit-produto-material"></div></div><div class="row"><div class="col-md-4 mb-3"><label for="edit-produto-preco-venda" class="form-label">Preço Venda</label><input type="number" step="0.01" class="form-control" id="edit-produto-preco-venda" required></div><div class="col-md-4 mb-3"><label for="edit-produto-preco-custo" class="form-label">Preço Custo</label><input type="number" step="0.01" class="form-control" id="edit-produto-preco-custo"></div></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarEdicaoProduto()">Salvar</button></div></div></div></div>
-
-    <!-- Modal de Gestão de Estoque -->
-    <div class="modal fade" id="estoqueModal" tabindex="-1" aria-labelledby="estoqueModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="estoqueModalLabel">Gerir Estoque do Produto</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <h6 id="estoque-produto-titulo"></h6>
-                    <div class="card mb-4">
-                        <div class="card-header">Adicionar Nova Variação</div>
-                        <div class="card-body">
-                            <form id="form-adicionar-variacao" onsubmit="adicionarVariacao(event)">
-                                <input type="hidden" id="estoque-produto-id">
-                                <div class="row align-items-end">
-                                    <div class="col-md-3"><label class="form-label">Cor</label><input type="text" id="estoque-cor" class="form-control" required></div>
-                                    <div class="col-md-2"><label class="form-label">Quantidade</label><input type="number" id="estoque-quantidade" class="form-control" required></div>
-                                    <div class="col-md-4"><label class="form-label">Foto</label><input type="file" id="estoque-foto" class="form-control"></div>
-                                    <div class="col-md-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="estoque-encomenda" checked><label class="form-check-label">P/ Encomenda</label></div></div>
-                                    <div class="col-md-1"><button type="submit" class="btn btn-primary w-100">Add</button></div>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">Variações Existentes</div>
-                        <div class="card-body" id="tabela-estoque-container"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- NOVO: Modal de Edição de Variação de Estoque -->
-    <div class="modal fade" id="editVariacaoModal" tabindex="-1" aria-labelledby="editVariacaoModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="editVariacaoModalLabel">Editar Variação de Estoque</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="form-editar-variacao" onsubmit="salvarEdicaoVariacao(event)">
-                        <input type="hidden" id="edit-variacao-id">
-                        <input type="hidden" id="edit-variacao-produto-id">
-                        <input type="hidden" id="edit-variacao-produto-nome">
-                        <div class="row align-items-end">
-                            <div class="col-md-3"><label class="form-label">Cor</label><input type="text" id="edit-estoque-cor" class="form-control" required></div>
-                            <div class="col-md-2"><label class="form-label">Quantidade</label><input type="number" id="edit-estoque-quantidade" class="form-control" required></div>
-                            <div class="col-md-5"><label class="form-label">Nova Foto (Opcional)</label><input type="file" id="edit-estoque-foto" class="form-control"></div>
-                            <div class="col-md-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="edit-estoque-encomenda"><label class="form-check-label">P/ Encomenda</label></div></div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" form="form-editar-variacao" class="btn btn-primary">Salvar Alterações</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div class="modal fade" id="estoqueModal" tabindex="-1"><div class="modal-dialog modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="estoqueModalLabel">Gerir Estoque</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><h6 id="estoque-produto-titulo"></h6><div class="card mb-4"><div class="card-header">Adicionar Variação</div><div class="card-body"><form id="form-adicionar-variacao" onsubmit="adicionarVariacao(event)"><input type="hidden" id="estoque-produto-id"><div class="row align-items-end"><div class="col-md-3"><label class="form-label">Cor</label><input type="text" id="estoque-cor" class="form-control" required></div><div class="col-md-2"><label class="form-label">Qtd.</label><input type="number" id="estoque-quantidade" class="form-control" required></div><div class="col-md-4"><label class="form-label">Foto</label><input type="file" id="estoque-foto" class="form-control"></div><div class="col-md-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="estoque-encomenda" checked><label class="form-check-label">P/ Enc.</label></div></div><div class="col-md-1"><button type="submit" class="btn btn-primary w-100">Add</button></div></div></form></div></div><div class="card"><div class="card-header">Variações Existentes</div><div class="card-body" id="tabela-estoque-container"></div></div></div></div></div></div>
+    <div class="modal fade" id="editVariacaoModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Editar Variação</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form id="form-editar-variacao" onsubmit="salvarEdicaoVariacao(event)"><input type="hidden" id="edit-variacao-id"><input type="hidden" id="edit-variacao-produto-id"><input type="hidden" id="edit-variacao-produto-nome"><div class="row align-items-end"><div class="col-md-3"><label class="form-label">Cor</label><input type="text" id="edit-estoque-cor" class="form-control" required></div><div class="col-md-2"><label class="form-label">Qtd.</label><input type="number" id="edit-estoque-quantidade" class="form-control" required></div><div class="col-md-5"><label class="form-label">Nova Foto</label><input type="file" id="edit-estoque-foto" class="form-control"></div><div class="col-md-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="edit-estoque-encomenda"><label class="form-check-label">P/ Enc.</label></div></div></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" form="form-editar-variacao" class="btn btn-primary">Salvar</button></div></div></div></div>
+    <div class="modal fade" id="editFornecedorModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Editar Fornecedor</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form><input type="hidden" id="edit-fornecedor-id"><div class="mb-3"><label class="form-label">Nome</label><input type="text" class="form-control" id="edit-fornecedor-nome" required></div><div class="mb-3"><label class="form-label">Telefone</label><input type="text" class="form-control" id="edit-fornecedor-telefone"></div><div class="mb-3"><label class="form-label">Email</label><input type="email" class="form-control" id="edit-fornecedor-email"></div></form></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarEdicaoFornecedor()">Salvar</button></div></div></div></div>
 
     <!-- Link para o JavaScript do Bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- Nosso JavaScript -->
     <script>
-        let todasAsMarcas = [], todosOsModelos = [], todosOsProdutos = [], variacoesAtuais = [];
+        let todasAsMarcas = [], todosOsModelos = [], todosOsProdutos = [], variacoesAtuais = [], todosOsFornecedores = [];
 
         function alternarMenu(secao) {
             document.querySelectorAll('.navbar-nav .nav-link').forEach(link => link.classList.remove('active'));
@@ -122,13 +65,14 @@
             if (secao === 'marcas') mostrarGerenciamentoMarcas();
             else if (secao === 'modelos') mostrarGerenciamentoModelos();
             else if (secao === 'produtos') mostrarGerenciamentoProdutos();
+            else if (secao === 'fornecedores') mostrarGerenciamentoFornecedores();
         }
 
         function mostrarCarregamento(elementoId = 'conteudo-principal') {
             document.getElementById(elementoId).innerHTML = '<div class="d-flex justify-content-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
         }
 
-        // --- GESTÃO DE MARCAS (sem alterações) ---
+        // --- GESTÃO DE MARCAS ---
         async function mostrarGerenciamentoMarcas() {
             mostrarCarregamento();
             try {
@@ -176,7 +120,7 @@
             } catch (e) { alert(`Erro: ${e.message}`); }
         }
 
-        // --- GESTÃO DE MODELOS (sem alterações) ---
+        // --- GESTÃO DE MODELOS ---
         async function mostrarGerenciamentoModelos() {
             mostrarCarregamento();
             try {
@@ -232,7 +176,7 @@
             } catch (e) { alert(`Erro: ${e.message}`); }
         }
 
-        // --- GESTÃO DE PRODUTOS (sem alterações) ---
+        // --- GESTÃO DE PRODUTOS ---
         async function mostrarGerenciamentoProdutos() {
             mostrarCarregamento();
             try {
@@ -296,7 +240,6 @@
         }
 
         // --- GESTÃO DE ESTOQUE ---
-
         async function mostrarGerenciamentoEstoque(produtoId, nomeProduto) {
             const modalElement = document.getElementById('estoqueModal');
             const modal = new bootstrap.Modal(modalElement);
@@ -311,7 +254,7 @@
                 const response = await fetch(`/estoque/produto/${produtoId}`);
                 if (!response.ok) throw new Error('Falha ao carregar variações de estoque.');
                 const variacoes = await response.json();
-                variacoesAtuais = variacoes; // Guarda as variações para uso na edição
+                variacoesAtuais = variacoes;
 
                 if (variacoes.length === 0) {
                     containerTabela.innerHTML = '<p class="text-center">Nenhuma variação de estoque encontrada.</p>';
@@ -329,7 +272,6 @@
                 containerTabela.innerHTML = `<p class="text-danger">Erro: ${error.message}</p>`;
             }
         }
-
         async function adicionarVariacao(event) {
             event.preventDefault();
             const form = document.getElementById('form-adicionar-variacao');
@@ -350,7 +292,6 @@
                 mostrarGerenciamentoEstoque(produtoId, nomeProduto);
             } catch (error) { alert(`Erro: ${error.message}`); }
         }
-
         async function apagarVariacao(variacaoId, produtoId, nomeProduto) {
             if (!confirm(`Tem a certeza que deseja apagar a variação com ID ${variacaoId}?`)) return;
             try {
@@ -362,7 +303,6 @@
                 mostrarGerenciamentoEstoque(produtoId, nomeProduto);
             } catch (error) { alert(`Erro: ${error.message}`); }
         }
-
         function editarVariacao(variacaoId, produtoId, nomeProduto) {
             const variacao = variacoesAtuais.find(v => v.id === variacaoId);
             if (!variacao) return alert('Variação não encontrada!');
@@ -373,11 +313,10 @@
             document.getElementById('edit-estoque-cor').value = variacao.cor;
             document.getElementById('edit-estoque-quantidade').value = variacao.quantidade;
             document.getElementById('edit-estoque-encomenda').checked = variacao.disponivel_encomenda;
-            document.getElementById('edit-estoque-foto').value = ''; // Limpa o campo de ficheiro
+            document.getElementById('edit-estoque-foto').value = '';
 
             new bootstrap.Modal(document.getElementById('editVariacaoModal')).show();
         }
-
         async function salvarEdicaoVariacao(event) {
             event.preventDefault();
             const variacaoId = document.getElementById('edit-variacao-id').value;
@@ -395,25 +334,94 @@
             }
 
             try {
-                // O método para enviar form-data com PUT é um pouco diferente,
-                // temos de usar POST e adicionar um campo _method='PUT' se a API o suportar,
-                // mas o FastAPI é inteligente e aceita o PUT diretamente com FormData.
-                const response = await fetch(`/estoque/${variacaoId}`, {
-                    method: 'PUT',
-                    body: formData,
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Falha ao atualizar variação.');
-                }
+                const response = await fetch(`/estoque/${variacaoId}`, { method: 'PUT', body: formData });
+                if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || 'Falha ao atualizar variação.'); }
                 
                 bootstrap.Modal.getInstance(document.getElementById('editVariacaoModal')).hide();
                 mostrarGerenciamentoEstoque(produtoId, nomeProduto);
+            } catch (error) { alert(`Erro: ${error.message}`); }
+        }
 
-            } catch (error) {
-                alert(`Erro: ${error.message}`);
-            }
+        // --- GESTÃO DE FORNECEDORES ---
+        async function mostrarGerenciamentoFornecedores() {
+            mostrarCarregamento();
+            try {
+                const response = await fetch('/fornecedores');
+                if (!response.ok) throw new Error('Falha ao carregar fornecedores.');
+                const fornecedores = await response.json();
+                todosOsFornecedores = fornecedores;
+
+                let html = `
+                    <h2>Gerir Fornecedores</h2>
+                    <div class="card mb-4">
+                        <div class="card-header">Adicionar Novo Fornecedor</div>
+                        <div class="card-body">
+                            <form onsubmit="adicionarFornecedor(event)">
+                                <div class="row align-items-end">
+                                    <div class="col-md-4"><label class="form-label">Nome</label><input type="text" id="fornecedor-nome" class="form-control" required></div>
+                                    <div class="col-md-3"><label class="form-label">Telefone</label><input type="text" id="fornecedor-telefone" class="form-control"></div>
+                                    <div class="col-md-3"><label class="form-label">Email</label><input type="email" id="fornecedor-email" class="form-control"></div>
+                                    <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Adicionar</button></div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">Fornecedores Existentes</div>
+                        <div class="card-body">
+                            <table class="table table-striped table-hover">
+                                <thead><tr><th>ID</th><th>Nome</th><th>Telefone</th><th>Email</th><th class="text-end">Ações</th></tr></thead>
+                                <tbody>
+                                    ${fornecedores.map(f => `
+                                        <tr id="fornecedor-${f.id}">
+                                            <td>${f.id}</td><td>${f.nome}</td><td>${f.contato_telefone || '-'}</td><td>${f.contato_email || '-'}</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-warning" onclick="editarFornecedor(${f.id})"><i class="bi bi-pencil"></i></button>
+                                                <button class="btn btn-sm btn-danger" onclick="apagarFornecedor(${f.id})"><i class="bi bi-trash"></i></button>
+                                            </td>
+                                        </tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`;
+                document.getElementById('conteudo-principal').innerHTML = html;
+            } catch (e) { document.getElementById('conteudo-principal').innerHTML = `<p class="text-danger">Erro: ${e.message}</p>`; }
+        }
+        async function adicionarFornecedor(event) {
+            event.preventDefault();
+            const payload = { nome: document.getElementById('fornecedor-nome').value, contato_telefone: document.getElementById('fornecedor-telefone').value || null, contato_email: document.getElementById('fornecedor-email').value || null };
+            try {
+                const response = await fetch('/fornecedores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                mostrarGerenciamentoFornecedores();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+        function editarFornecedor(id) {
+            const fornecedor = todosOsFornecedores.find(f => f.id === id);
+            if (!fornecedor) return alert('Fornecedor não encontrado!');
+            document.getElementById('edit-fornecedor-id').value = fornecedor.id;
+            document.getElementById('edit-fornecedor-nome').value = fornecedor.nome;
+            document.getElementById('edit-fornecedor-telefone').value = fornecedor.contato_telefone || '';
+            document.getElementById('edit-fornecedor-email').value = fornecedor.contato_email || '';
+            new bootstrap.Modal(document.getElementById('editFornecedorModal')).show();
+        }
+        async function salvarEdicaoFornecedor() {
+            const id = document.getElementById('edit-fornecedor-id').value;
+            const payload = { nome: document.getElementById('edit-fornecedor-nome').value, contato_telefone: document.getElementById('edit-fornecedor-telefone').value || null, contato_email: document.getElementById('edit-fornecedor-email').value || null };
+            try {
+                const response = await fetch(`/fornecedores/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                bootstrap.Modal.getInstance(document.getElementById('editFornecedorModal')).hide();
+                mostrarGerenciamentoFornecedores();
+            } catch (e) { alert(`Erro: ${e.message}`); }
+        }
+        async function apagarFornecedor(id) {
+            if (!confirm(`Tem a certeza?`)) return;
+            try {
+                const response = await fetch(`/fornecedores/${id}`, { method: 'DELETE' });
+                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                document.getElementById(`fornecedor-${id}`)?.remove();
+            } catch (e) { alert(`Erro: ${e.message}`); }
         }
 
         // Carrega a gestão de marcas por defeito ao abrir a página
