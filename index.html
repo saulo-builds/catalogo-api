@@ -89,8 +89,10 @@
         async function adicionarMarca(event) {
             event.preventDefault();
             const input = document.getElementById('nome-marca-input');
+            const nomeMarca = input.value.trim();
+            if (!nomeMarca) return;
             try {
-                const response = await fetch('/marcas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: input.value }) });
+                const response = await fetch('/marcas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nomeMarca }) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 input.value = '';
                 mostrarGerenciamentoMarcas();
@@ -103,7 +105,8 @@
         }
         async function salvarEdicaoMarca() {
             const id = document.getElementById('edit-marca-id').value;
-            const nome = document.getElementById('edit-marca-nome').value;
+            const nome = document.getElementById('edit-marca-nome').value.trim();
+            if (!nome) return;
             try {
                 const response = await fetch(`/marcas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome }) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
@@ -141,7 +144,8 @@
         }
         async function adicionarModelo(event) {
             event.preventDefault();
-            const payload = { nome_modelo: document.getElementById('nome-modelo-input').value, id_marca: parseInt(document.getElementById('id-marca-select').value) };
+            const payload = { nome_modelo: document.getElementById('nome-modelo-input').value.trim(), id_marca: parseInt(document.getElementById('id-marca-select').value) };
+            if (!payload.nome_modelo) return;
             try {
                 const response = await fetch('/modelos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
@@ -159,7 +163,8 @@
         }
         async function salvarEdicaoModelo() {
             const id = document.getElementById('edit-modelo-id').value;
-            const payload = { nome_modelo: document.getElementById('edit-modelo-nome').value, id_marca: parseInt(document.getElementById('edit-modelo-marca-select').value) };
+            const payload = { nome_modelo: document.getElementById('edit-modelo-nome').value.trim(), id_marca: parseInt(document.getElementById('edit-modelo-marca-select').value) };
+            if (!payload.nome_modelo) return;
             try {
                 const response = await fetch(`/modelos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
@@ -197,7 +202,7 @@
         }
         async function adicionarProduto(event) {
             event.preventDefault();
-            const payload = { nome: document.getElementById('produto-nome').value, id_modelo_celular: parseInt(document.getElementById('produto-modelo-select').value), tipo: document.getElementById('produto-tipo').value, material: document.getElementById('produto-material').value || null, preco_venda: parseFloat(document.getElementById('produto-preco-venda').value), preco_custo: document.getElementById('produto-preco-custo').value ? parseFloat(document.getElementById('produto-preco-custo').value) : null };
+            const payload = { nome: document.getElementById('produto-nome').value.trim(), id_modelo_celular: parseInt(document.getElementById('produto-modelo-select').value), tipo: document.getElementById('produto-tipo').value.trim(), material: document.getElementById('produto-material').value.trim() || null, preco_venda: parseFloat(document.getElementById('produto-preco-venda').value), preco_custo: document.getElementById('produto-preco-custo').value ? parseFloat(document.getElementById('produto-preco-custo').value) : null };
             try {
                 const response = await fetch('/produtos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
@@ -222,7 +227,7 @@
         }
         async function salvarEdicaoProduto() {
             const id = document.getElementById('edit-produto-id').value;
-            const payload = { nome: document.getElementById('edit-produto-nome').value, id_modelo_celular: parseInt(document.getElementById('edit-produto-modelo-select').value), tipo: document.getElementById('edit-produto-tipo').value, material: document.getElementById('edit-produto-material').value || null, preco_venda: parseFloat(document.getElementById('edit-produto-preco-venda').value), preco_custo: document.getElementById('edit-produto-preco-custo').value ? parseFloat(document.getElementById('edit-produto-preco-custo').value) : null };
+            const payload = { nome: document.getElementById('edit-produto-nome').value.trim(), id_modelo_celular: parseInt(document.getElementById('edit-produto-modelo-select').value), tipo: document.getElementById('edit-produto-tipo').value.trim(), material: document.getElementById('edit-produto-material').value.trim() || null, preco_venda: parseFloat(document.getElementById('edit-produto-preco-venda').value), preco_custo: document.getElementById('edit-produto-preco-custo').value ? parseFloat(document.getElementById('edit-produto-preco-custo').value) : null };
             try {
                 const response = await fetch(`/produtos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
@@ -278,7 +283,7 @@
             const produtoId = document.getElementById('estoque-produto-id').value;
             const formData = new FormData();
             formData.append('id_produto', produtoId);
-            formData.append('cor', document.getElementById('estoque-cor').value);
+            formData.append('cor', document.getElementById('estoque-cor').value.trim());
             formData.append('quantidade', document.getElementById('estoque-quantidade').value);
             formData.append('disponivel_encomenda', document.getElementById('estoque-encomenda').checked);
             const fotoInput = document.getElementById('estoque-foto');
@@ -324,7 +329,7 @@
             const nomeProduto = document.getElementById('edit-variacao-produto-nome').value;
 
             const formData = new FormData();
-            formData.append('cor', document.getElementById('edit-estoque-cor').value);
+            formData.append('cor', document.getElementById('edit-estoque-cor').value.trim());
             formData.append('quantidade', document.getElementById('edit-estoque-quantidade').value);
             formData.append('disponivel_encomenda', document.getElementById('edit-estoque-encomenda').checked);
             
@@ -389,7 +394,7 @@
         }
         async function adicionarFornecedor(event) {
             event.preventDefault();
-            const payload = { nome: document.getElementById('fornecedor-nome').value, contato_telefone: document.getElementById('fornecedor-telefone').value || null, contato_email: document.getElementById('fornecedor-email').value || null };
+            const payload = { nome: document.getElementById('fornecedor-nome').value.trim(), contato_telefone: document.getElementById('fornecedor-telefone').value.trim() || null, contato_email: document.getElementById('fornecedor-email').value.trim() || null };
             try {
                 const response = await fetch('/fornecedores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
@@ -407,7 +412,7 @@
         }
         async function salvarEdicaoFornecedor() {
             const id = document.getElementById('edit-fornecedor-id').value;
-            const payload = { nome: document.getElementById('edit-fornecedor-nome').value, contato_telefone: document.getElementById('edit-fornecedor-telefone').value || null, contato_email: document.getElementById('edit-fornecedor-email').value || null };
+            const payload = { nome: document.getElementById('edit-fornecedor-nome').value.trim(), contato_telefone: document.getElementById('edit-fornecedor-telefone').value.trim() || null, contato_email: document.getElementById('edit-fornecedor-email').value.trim() || null };
             try {
                 const response = await fetch(`/fornecedores/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }

@@ -24,10 +24,16 @@ if not os.path.exists(UPLOAD_DIRECTORY):
 # --- Modelos Pydantic ---
 class MarcaBase(BaseModel):
     nome: str
+    @field_validator('nome')
+    def trim_whitespace(cls, v):
+        return v.strip()
 
 class ModeloBase(BaseModel):
     nome_modelo: str
     id_marca: int
+    @field_validator('nome_modelo')
+    def trim_whitespace(cls, v):
+        return v.strip()
 
 class ModeloResponse(BaseModel):
     id: int
@@ -41,6 +47,11 @@ class ProdutoBase(BaseModel):
     preco_venda: float
     preco_custo: Optional[float] = None
     id_modelo_celular: int
+    @field_validator('nome', 'tipo', 'material')
+    def trim_whitespace(cls, v):
+        if v is not None:
+            return v.strip()
+        return v
 
 class ProdutoResponse(BaseModel):
     id: int
@@ -55,6 +66,9 @@ class EstoqueVariacaoBase(BaseModel):
     cor: str
     quantidade: int
     disponivel_encomenda: bool = True
+    @field_validator('cor')
+    def trim_whitespace(cls, v):
+        return v.strip()
 
 class EstoqueVariacaoResponse(BaseModel):
     id: int
@@ -70,13 +84,16 @@ class FornecedorBase(BaseModel):
     contato_telefone: Optional[str] = None
     contato_email: Optional[str] = None
 
-    # Validador para o campo de telefone
+    @field_validator('nome', 'contato_telefone', 'contato_email')
+    def trim_whitespace(cls, v):
+        if v is not None:
+            return v.strip()
+        return v
+
     @field_validator('contato_telefone')
     def validar_telefone(cls, v):
-        if v is None:
+        if v is None or v == '':
             return v
-        # Expressão regular para validar formatos de telefone brasileiros
-        # Ex: (11) 98765-4321, 11987654321, etc.
         regex = re.compile(r'^\(?\d{2}\)?[\s-]?\d{4,5}-?\d{4}$')
         if not regex.match(v):
             raise ValueError('Número de telefone inválido.')
@@ -120,9 +137,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # --- Endpoint Principal para servir o Frontend (CORRIGIDO) ---
 @app.get("/")
 def ler_raiz():
-    """
-    Este endpoint serve a página principal do painel administrativo.
-    """
     return FileResponse(os.path.join(BASE_DIR, 'index.html'))
 
 
@@ -528,6 +542,9 @@ def criar_fornecedor(fornecedor: FornecedorBase, db: Session = Depends(get_db)):
         })
         db.commit()
         return {"mensagem": f"Fornecedor '{fornecedor.nome}' criado com sucesso."}
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Já existe um fornecedor com este nome.")
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao criar fornecedor: {e}")
@@ -552,6 +569,9 @@ def atualizar_fornecedor(fornecedor_id: int, fornecedor: FornecedorBase, db: Ses
             raise HTTPException(status_code=404, detail="Fornecedor não encontrado.")
         db.commit()
         return {"mensagem": f"Fornecedor ID {fornecedor_id} atualizado com sucesso."}
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Já existe um fornecedor com este nome.")
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar fornecedor: {e}")
