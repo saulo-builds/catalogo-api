@@ -64,13 +64,26 @@ class EstoqueVariacaoResponse(BaseModel):
     modelo_celular: str
 
 # --- Configuração do Banco de Dados ---
-DATABASE_URL = "mysql+mysqlconnector://root:@localhost/catalogo_inteligente" 
+# Pega a URL do banco de dados da variável de ambiente (para o Render)
+DATABASE_URL_ENV = os.getenv("DATABASE_URL")
+
+if DATABASE_URL_ENV and DATABASE_URL_ENV.startswith("postgres://"):
+    # Converte a URL do Render (postgres://) para o formato que o SQLAlchemy entende (postgresql://)
+    DATABASE_URL = DATABASE_URL_ENV.replace("postgres://", "postgresql://", 1)
+    print("A usar a base de dados PostgreSQL do Render.")
+else:
+    # Se não encontrar a variável de ambiente, usa a URL do banco de dados local (XAMPP)
+    DATABASE_URL = "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
+    print("A usar a base de dados local MariaDB/MySQL.")
+
 
 try:
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    print("Conexão com o banco de dados 'catalogo_inteligente' estabelecida com sucesso!")
-except OperationalError as e:
+    # Testa a conexão para garantir que está tudo bem
+    with engine.connect() as connection:
+        print("Conexão com o banco de dados estabelecida com sucesso!")
+except Exception as e:
     print(f"Erro ao conectar ao banco de dados: {e}")
     exit()
 
@@ -436,7 +449,6 @@ def atualizar_variacao_estoque(
         })
         db.commit()
         return {"mensagem": "Variação de estoque atualizada com sucesso."}
-    # CORRIGIDO: Adicionado o tratamento de erro específico
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Já existe uma variação com esta cor para este produto.")
