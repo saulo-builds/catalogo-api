@@ -78,6 +78,8 @@ class EstoqueVariacaoResponse(BaseModel):
     url_foto: Optional[str] = None
     produto_nome: str
     modelo_celular: str
+    # Adicionamos o preco_venda para o catálogo do cliente
+    preco_venda: float
 
 class FornecedorBase(BaseModel):
     nome: str
@@ -134,11 +136,57 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-# --- Endpoint Principal para servir o Frontend (CORRIGIDO) ---
+# --- Endpoints Principais ---
 @app.get("/")
 def ler_raiz():
     return FileResponse(os.path.join(BASE_DIR, 'index.html'))
 
+@app.get("/catalogo")
+def ler_catalogo():
+    return FileResponse(os.path.join(BASE_DIR, 'catalogo.html'))
+
+@app.get("/catalogo/search", response_model=List[EstoqueVariacaoResponse])
+def procurar_no_catalogo(q: Optional[str] = None, db: Session = Depends(get_db)):
+    if not q:
+        return []
+    
+    search_term = f"%{q}%"
+    
+    db_type = engine.dialect.name
+    like_operator = "ILIKE" if db_type == "postgresql" else "LIKE"
+    
+    query_sql = f"""
+        SELECT 
+            ev.id, ev.cor, ev.quantidade, ev.url_foto, ev.disponivel_encomenda,
+            p.nome as produto_nome,
+            CONCAT(b.nome, ' ', m.nome_modelo) AS modelo_celular,
+            p.preco_venda
+        FROM estoque_variacoes AS ev
+        JOIN produtos AS p ON ev.id_produto = p.id
+        JOIN modelos_celular AS m ON p.id_modelo_celular = m.id
+        JOIN marcas AS b ON m.id_marca = b.id
+        WHERE CONCAT(b.nome, ' ', m.nome_modelo) {like_operator} :search_term
+        ORDER BY ev.cor
+    """
+    
+    try:
+        resultado = db.execute(text(query_sql), {"search_term": search_term}).fetchall()
+        
+        variacoes = [
+            EstoqueVariacaoResponse(
+                id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3],
+                disponivel_encomenda=row[4], produto_nome=row[5], 
+                modelo_celular=row[6], preco_venda=row[7]
+            ) for row in resultado
+        ]
+        return variacoes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar no catálogo: {e}")
+
+
+# --- Endpoints do Painel de Admin ---
+# (Todo o código dos endpoints de Marcas, Modelos, Produtos, Estoque e Fornecedores continua aqui, sem alterações)
+# ...
 
 # --- Endpoints de Marcas ---
 @app.get("/marcas")
@@ -366,7 +414,8 @@ def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db))
             SELECT 
                 ev.id, ev.cor, ev.quantidade, ev.url_foto, ev.disponivel_encomenda,
                 p.nome as produto_nome,
-                CONCAT(b.nome, ' ', m.nome_modelo) AS modelo_celular
+                CONCAT(b.nome, ' ', m.nome_modelo) AS modelo_celular,
+                p.preco_venda
             FROM estoque_variacoes AS ev
             JOIN produtos AS p ON ev.id_produto = p.id
             JOIN modelos_celular AS m ON p.id_modelo_celular = m.id
@@ -384,8 +433,8 @@ def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db))
         variacoes = [
             EstoqueVariacaoResponse(
                 id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3],
-                disponivel_encomenda=row[4],
-                produto_nome=row[5], modelo_celular=row[6]
+                disponivel_encomenda=row[4], produto_nome=row[5], 
+                modelo_celular=row[6], preco_venda=row[7]
             ) for row in resultado
         ]
         return variacoes
@@ -405,7 +454,7 @@ def criar_variacao_estoque(
 ):
     url_foto_final = None
     if foto and foto.filename:
-        nome_arquivo = f"{id_produto}_{cor}_{foto.filename}".replace(" ", "_")
+        nome_arquivo = f"{id_produto}_{cor.strip()}_{foto.filename}".replace(" ", "_")
         file_path = os.path.join(UPLOAD_DIRECTORY, nome_arquivo)
         
         with open(file_path, "wb") as buffer:
@@ -420,7 +469,7 @@ def criar_variacao_estoque(
         """)
         db.execute(query, {
             "id_produto": id_produto,
-            "cor": cor,
+            "cor": cor.strip(),
             "quantidade": quantidade,
             "disponivel_encomenda": disponivel_encomenda,
             "url_foto": url_foto_final
@@ -457,7 +506,7 @@ def atualizar_variacao_estoque(
             if os.path.exists(caminho_foto_antiga):
                 os.remove(caminho_foto_antiga)
         
-        nome_arquivo = f"{id_produto}_{cor}_{foto.filename}".replace(" ", "_")
+        nome_arquivo = f"{id_produto}_{cor.strip()}_{foto.filename}".replace(" ", "_")
         file_path = os.path.join(UPLOAD_DIRECTORY, nome_arquivo)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(foto.file, buffer)
@@ -473,7 +522,7 @@ def atualizar_variacao_estoque(
             WHERE id = :id
         """)
         db.execute(query, {
-            "cor": cor,
+            "cor": cor.strip(),
             "quantidade": quantidade,
             "disponivel_encomenda": disponivel_encomenda,
             "url_foto": url_foto_final,
