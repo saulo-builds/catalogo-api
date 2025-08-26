@@ -36,6 +36,19 @@
         </div>
     </nav>
 
+    <!-- Container para os Toasts (notificações) -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toast-title">Notificação</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="toast-body">
+                Mensagem aqui.
+            </div>
+        </div>
+    </div>
+
     <div class="container mt-4">
         <!-- O conteúdo dinâmico será carregado aqui -->
         <div id="conteudo-principal">
@@ -58,6 +71,28 @@
     <!-- Nosso JavaScript -->
     <script>
         let todasAsMarcas = [], todosOsModelos = [], todosOsProdutos = [], variacoesAtuais = [], todosOsFornecedores = [];
+
+        // --- FUNÇÕES UTILITÁRIAS ---
+        function mostrarToast(mensagem, tipo = 'success') {
+            const toastElement = document.getElementById('liveToast');
+            const toastBody = document.getElementById('toast-body');
+            const toastTitle = document.getElementById('toast-title');
+            
+            toastBody.innerText = mensagem;
+            
+            // Remove classes de cor antigas e adiciona a nova
+            toastElement.classList.remove('text-bg-success', 'text-bg-danger');
+            if (tipo === 'success') {
+                toastElement.classList.add('text-bg-success');
+                toastTitle.innerText = 'Sucesso!';
+            } else if (tipo === 'error') {
+                toastElement.classList.add('text-bg-danger');
+                toastTitle.innerText = 'Erro!';
+            }
+
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+        }
 
         function alternarMenu(secao) {
             document.querySelectorAll('.navbar-nav .nav-link').forEach(link => link.classList.remove('active'));
@@ -95,8 +130,9 @@
                 const response = await fetch('/marcas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nomeMarca }) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 input.value = '';
+                mostrarToast('Marca adicionada com sucesso!');
                 mostrarGerenciamentoMarcas();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         function editarMarca(id, nome) {
             document.getElementById('edit-marca-id').value = id;
@@ -111,8 +147,9 @@
                 const response = await fetch(`/marcas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome }) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('editMarcaModal')).hide();
+                mostrarToast('Marca atualizada com sucesso!');
                 mostrarGerenciamentoMarcas();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         async function apagarMarca(id) {
             if (!confirm(`Tem a certeza?`)) return;
@@ -120,7 +157,8 @@
                 const response = await fetch(`/marcas/${id}`, { method: 'DELETE' });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 document.getElementById(`marca-${id}`)?.remove();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+                mostrarToast('Marca apagada com sucesso!');
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
 
         // --- GESTÃO DE MODELOS ---
@@ -149,8 +187,9 @@
             try {
                 const response = await fetch('/modelos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                mostrarToast('Modelo adicionado com sucesso!');
                 mostrarGerenciamentoModelos();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         function editarModelo(id, nome, marcaNome) {
             const selMarcas = document.getElementById('edit-modelo-marca-select');
@@ -169,8 +208,9 @@
                 const response = await fetch(`/modelos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('editModeloModal')).hide();
+                mostrarToast('Modelo atualizado com sucesso!');
                 mostrarGerenciamentoModelos();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         async function apagarModelo(id) {
             if (!confirm(`Tem a certeza?`)) return;
@@ -178,7 +218,8 @@
                 const response = await fetch(`/modelos/${id}`, { method: 'DELETE' });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 document.getElementById(`modelo-${id}`)?.remove();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+                mostrarToast('Modelo apagado com sucesso!');
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
 
         // --- GESTÃO DE PRODUTOS ---
@@ -206,14 +247,15 @@
             try {
                 const response = await fetch('/produtos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                mostrarToast('Produto adicionado com sucesso!');
                 mostrarGerenciamentoProdutos();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         async function editarProduto(id) {
             const produto = todosOsProdutos.find(p => p.id === id);
-            if (!produto) return alert('Produto não encontrado!');
+            if (!produto) return mostrarToast('Produto não encontrado!', 'error');
             const modeloDoProduto = todosOsModelos.find(m => `${m.marca_nome} ${m.nome_modelo}` === produto.modelo_celular);
-            if (!modeloDoProduto) return alert('Modelo do produto não encontrado!');
+            if (!modeloDoProduto) return mostrarToast('Modelo do produto não encontrado!', 'error');
             const selModelos = document.getElementById('edit-produto-modelo-select');
             selModelos.innerHTML = todosOsModelos.map(m => `<option value="${m.id}">${m.marca_nome} ${m.nome_modelo}</option>`).join('');
             document.getElementById('edit-produto-id').value = produto.id;
@@ -232,8 +274,9 @@
                 const response = await fetch(`/produtos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('editProdutoModal')).hide();
+                mostrarToast('Produto atualizado com sucesso!');
                 mostrarGerenciamentoProdutos();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         async function apagarProduto(id) {
             if (!confirm(`Tem a certeza?`)) return;
@@ -241,7 +284,8 @@
                 const response = await fetch(`/produtos/${id}`, { method: 'DELETE' });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 document.getElementById(`produto-${id}`)?.remove();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+                mostrarToast('Produto apagado com sucesso!');
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
 
         // --- GESTÃO DE ESTOQUE ---
@@ -294,8 +338,9 @@
                 if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || 'Falha ao adicionar variação.'); }
                 form.reset();
                 const nomeProduto = document.getElementById('estoque-produto-titulo').innerText.replace('Produto: ', '');
+                mostrarToast('Variação adicionada com sucesso!');
                 mostrarGerenciamentoEstoque(produtoId, nomeProduto);
-            } catch (error) { alert(`Erro: ${error.message}`); }
+            } catch (error) { mostrarToast(error.message, 'error'); }
         }
         async function apagarVariacao(variacaoId, produtoId, nomeProduto) {
             if (!confirm(`Tem a certeza que deseja apagar a variação com ID ${variacaoId}?`)) return;
@@ -305,12 +350,13 @@
                     try { const errorData = await response.json(); throw new Error(errorData.detail); } 
                     catch (e) { throw new Error(`Falha ao apagar variação. Status: ${response.status}`); }
                 }
+                mostrarToast('Variação apagada com sucesso!');
                 mostrarGerenciamentoEstoque(produtoId, nomeProduto);
-            } catch (error) { alert(`Erro: ${error.message}`); }
+            } catch (error) { mostrarToast(error.message, 'error'); }
         }
         function editarVariacao(variacaoId, produtoId, nomeProduto) {
             const variacao = variacoesAtuais.find(v => v.id === variacaoId);
-            if (!variacao) return alert('Variação não encontrada!');
+            if (!variacao) return mostrarToast('Variação não encontrada!', 'error');
 
             document.getElementById('edit-variacao-id').value = variacao.id;
             document.getElementById('edit-variacao-produto-id').value = produtoId;
@@ -343,8 +389,9 @@
                 if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || 'Falha ao atualizar variação.'); }
                 
                 bootstrap.Modal.getInstance(document.getElementById('editVariacaoModal')).hide();
+                mostrarToast('Variação atualizada com sucesso!');
                 mostrarGerenciamentoEstoque(produtoId, nomeProduto);
-            } catch (error) { alert(`Erro: ${error.message}`); }
+            } catch (error) { mostrarToast(error.message, 'error'); }
         }
 
         // --- GESTÃO DE FORNECEDORES ---
@@ -398,12 +445,13 @@
             try {
                 const response = await fetch('/fornecedores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                mostrarToast('Fornecedor adicionado com sucesso!');
                 mostrarGerenciamentoFornecedores();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         function editarFornecedor(id) {
             const fornecedor = todosOsFornecedores.find(f => f.id === id);
-            if (!fornecedor) return alert('Fornecedor não encontrado!');
+            if (!fornecedor) return mostrarToast('Fornecedor não encontrado!', 'error');
             document.getElementById('edit-fornecedor-id').value = fornecedor.id;
             document.getElementById('edit-fornecedor-nome').value = fornecedor.nome;
             document.getElementById('edit-fornecedor-telefone').value = fornecedor.contato_telefone || '';
@@ -417,8 +465,9 @@
                 const response = await fetch(`/fornecedores/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('editFornecedorModal')).hide();
+                mostrarToast('Fornecedor atualizado com sucesso!');
                 mostrarGerenciamentoFornecedores();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         async function apagarFornecedor(id) {
             if (!confirm(`Tem a certeza?`)) return;
@@ -426,7 +475,8 @@
                 const response = await fetch(`/fornecedores/${id}`, { method: 'DELETE' });
                 if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 document.getElementById(`fornecedor-${id}`)?.remove();
-            } catch (e) { alert(`Erro: ${e.message}`); }
+                mostrarToast('Fornecedor apagado com sucesso!');
+            } catch (e) { mostrarToast(e.message, 'error'); }
         }
         
         function mascaraTelefone(input) {
