@@ -1,14 +1,18 @@
 # seguranca.py
 
+import os
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 # --- Configurações de Segurança ---
-# Esta chave secreta é usada para "assinar" os nossos tokens.
-# Num projeto real, esta chave deveria ser guardada de forma segura e não diretamente no código.
-SECRET_KEY = "sua-chave-secreta-muito-segura" 
+# Lê a chave secreta da variável de ambiente.
+# Se não a encontrar, a aplicação irá falhar ao iniciar, o que é uma medida de segurança.
+SECRET_KEY = os.getenv("SECRET_KEY")
+if SECRET_KEY is None:
+    raise ValueError("A variável de ambiente SECRET_KEY não foi definida.")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30 # O token será válido por 30 minutos
 
@@ -34,10 +38,8 @@ def criar_access_token(data: dict) -> str:
     Cria um novo token de acesso (JWT).
     """
     to_encode = data.copy()
-    # Define o tempo de expiração do token
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    # Cria o token
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -46,12 +48,10 @@ def verificar_token(token: str) -> Optional[str]:
     Verifica um token e devolve o nome de utilizador (subject) se for válido.
     """
     try:
-        # Tenta descodificar o token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             return None
         return username
     except JWTError:
-        # Se o token for inválido ou tiver expirado, devolve None
         return None

@@ -2,28 +2,42 @@
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
-from getpass import getpass # Para esconder a senha ao digitar
+from getpass import getpass
 from seguranca import gerar_hash_senha
+import os
+from dotenv import load_dotenv
 
-# --- Configuração do Banco de Dados (igual ao main.py) ---
-DATABASE_URL = "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
+# Carrega as variáveis de ambiente do ficheiro .env
+load_dotenv()
 
-def criar_primeiro_usuario():
+# --- Configuração do Banco de Dados (Lógica Corrigida) ---
+# Pega a URL do banco de dados da variável de ambiente (para o Render)
+DATABASE_URL_ENV = os.getenv("DATABASE_URL")
+
+if DATABASE_URL_ENV and DATABASE_URL_ENV.startswith("postgres://"):
+    # Converte a URL do Render para o formato que o SQLAlchemy entende
+    DATABASE_URL = DATABASE_URL_ENV.replace("postgres://", "postgresql://", 1)
+    print("A conectar-se à base de dados PostgreSQL do Render...")
+else:
+    # Se não encontrar a variável de ambiente, usa a URL do banco de dados local
+    DATABASE_URL = "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
+    print("A conectar-se à base de dados local MariaDB/MySQL...")
+
+
+def criar_usuario_admin():
     """
     Script para criar um utilizador administrativo na base de dados.
     """
-    print("--- Criação do Utilizador Admin ---")
+    print("\n--- Criação do Utilizador Admin ---")
     
     try:
         engine = create_engine(DATABASE_URL)
         with engine.connect() as connection:
             
-            # Pede os dados ao utilizador
             username = input("Digite o nome de utilizador desejado: ").strip()
             password = getpass("Digite a senha desejada: ")
             password_confirm = getpass("Confirme a senha: ")
 
-            # Validações simples
             if not username or not password:
                 print("\nErro: Nome de utilizador e senha não podem estar vazios.")
                 return
@@ -32,14 +46,12 @@ def criar_primeiro_usuario():
                 print("\nErro: As senhas não coincidem.")
                 return
 
-            # Gera o hash da senha
             senha_hashed = gerar_hash_senha(password)
 
-            # Insere o novo utilizador na base de dados
             try:
+                # A sintaxe de inserção é a mesma para ambos os bancos de dados
                 query = text("INSERT INTO usuarios (username, senha_hash) VALUES (:username, :senha_hash)")
                 
-                # Usamos uma transação para garantir a integridade
                 trans = connection.begin()
                 connection.execute(query, {"username": username, "senha_hash": senha_hashed})
                 trans.commit()
@@ -56,4 +68,4 @@ def criar_primeiro_usuario():
 
 
 if __name__ == "__main__":
-    criar_primeiro_usuario()
+    criar_usuario_admin()
