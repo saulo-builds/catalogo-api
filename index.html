@@ -18,7 +18,7 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
                         <a class="nav-link" id="nav-marcas" href="#" onclick="alternarMenu('marcas')">Marcas</a>
                     </li>
@@ -32,6 +32,7 @@
                         <a class="nav-link" id="nav-fornecedores" href="#" onclick="alternarMenu('fornecedores')">Fornecedores</a>
                     </li>
                 </ul>
+                <button class="btn btn-outline-light" onclick="fazerLogout()">Sair <i class="bi bi-box-arrow-right"></i></button>
             </div>
         </div>
     </nav>
@@ -72,7 +73,35 @@
     <script>
         let todasAsMarcas = [], todosOsModelos = [], todosOsProdutos = [], variacoesAtuais = [], todosOsFornecedores = [];
 
-        // --- FUNÇÕES UTILITÁRIAS ---
+        // --- FUNÇÕES DE SEGURANÇA E UTILITÁRIAS ---
+        
+        async function fetchAPI(url, options = {}) {
+            const token = sessionStorage.getItem('accessToken');
+            if (!token) {
+                fazerLogout();
+                return null;
+            }
+
+            const headers = { ...options.headers };
+            if (!(options.body instanceof FormData)) {
+                headers['Content-Type'] = 'application/json';
+            }
+            headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(url, { ...options, headers });
+
+            if (response.status === 401) { // Não autorizado
+                fazerLogout();
+                return null;
+            }
+            return response;
+        }
+
+        function fazerLogout() {
+            sessionStorage.removeItem('accessToken');
+            window.location.href = window.location.origin + '/login';
+        }
+
         function mostrarToast(mensagem, tipo = 'success') {
             const toastElement = document.getElementById('liveToast');
             const toastBody = document.getElementById('toast-body');
@@ -80,7 +109,6 @@
             
             toastBody.innerText = mensagem;
             
-            // Remove classes de cor antigas e adiciona a nova
             toastElement.classList.remove('text-bg-success', 'text-bg-danger');
             if (tipo === 'success') {
                 toastElement.classList.add('text-bg-success');
@@ -111,8 +139,8 @@
         async function mostrarGerenciamentoMarcas() {
             mostrarCarregamento();
             try {
-                const response = await fetch('/marcas');
-                if (!response.ok) throw new Error('Falha ao carregar marcas.');
+                const response = await fetchAPI('/marcas');
+                if (!response || !response.ok) throw new Error('Falha ao carregar marcas.');
                 const marcas = await response.json();
                 todasAsMarcas = marcas;
                 let html = `<h2>Gerir Marcas</h2><div class="card mb-4"><div class="card-header">Adicionar Nova Marca</div><div class="card-body"><form onsubmit="adicionarMarca(event)"><div class="input-group"><input type="text" id="nome-marca-input" class="form-control" placeholder="Nome da marca" required><button type="submit" class="btn btn-primary">Adicionar</button></div></form></div></div><div class="card"><div class="card-header">Marcas Existentes</div><div class="card-body"><table class="table table-striped table-hover"><thead><tr><th>ID</th><th>Nome</th><th class="text-end">Ações</th></tr></thead><tbody>
@@ -127,8 +155,8 @@
             const nomeMarca = input.value.trim();
             if (!nomeMarca) return;
             try {
-                const response = await fetch('/marcas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nomeMarca }) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI('/marcas', { method: 'POST', body: JSON.stringify({ nome: nomeMarca }) });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 input.value = '';
                 mostrarToast('Marca adicionada com sucesso!');
                 mostrarGerenciamentoMarcas();
@@ -144,8 +172,8 @@
             const nome = document.getElementById('edit-marca-nome').value.trim();
             if (!nome) return;
             try {
-                const response = await fetch(`/marcas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome }) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI(`/marcas/${id}`, { method: 'PUT', body: JSON.stringify({ nome }) });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('editMarcaModal')).hide();
                 mostrarToast('Marca atualizada com sucesso!');
                 mostrarGerenciamentoMarcas();
@@ -154,8 +182,8 @@
         async function apagarMarca(id) {
             if (!confirm(`Tem a certeza?`)) return;
             try {
-                const response = await fetch(`/marcas/${id}`, { method: 'DELETE' });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI(`/marcas/${id}`, { method: 'DELETE' });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 document.getElementById(`marca-${id}`)?.remove();
                 mostrarToast('Marca apagada com sucesso!');
             } catch (e) { mostrarToast(e.message, 'error'); }
@@ -165,9 +193,9 @@
         async function mostrarGerenciamentoModelos() {
             mostrarCarregamento();
             try {
-                const [resModelos, resMarcas] = await Promise.all([fetch('/modelos'), fetch('/marcas')]);
-                if (!resModelos.ok) throw new Error('Falha ao carregar modelos.');
-                if (!resMarcas.ok) throw new Error('Falha ao carregar marcas.');
+                const [resModelos, resMarcas] = await Promise.all([fetchAPI('/modelos'), fetchAPI('/marcas')]);
+                if (!resModelos || !resModelos.ok) throw new Error('Falha ao carregar modelos.');
+                if (!resMarcas || !resMarcas.ok) throw new Error('Falha ao carregar marcas.');
                 const modelos = await resModelos.json();
                 const marcas = await resMarcas.json();
                 todasAsMarcas = marcas;
@@ -185,8 +213,8 @@
             const payload = { nome_modelo: document.getElementById('nome-modelo-input').value.trim(), id_marca: parseInt(document.getElementById('id-marca-select').value) };
             if (!payload.nome_modelo) return;
             try {
-                const response = await fetch('/modelos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI('/modelos', { method: 'POST', body: JSON.stringify(payload) });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 mostrarToast('Modelo adicionado com sucesso!');
                 mostrarGerenciamentoModelos();
             } catch (e) { mostrarToast(e.message, 'error'); }
@@ -205,8 +233,8 @@
             const payload = { nome_modelo: document.getElementById('edit-modelo-nome').value.trim(), id_marca: parseInt(document.getElementById('edit-modelo-marca-select').value) };
             if (!payload.nome_modelo) return;
             try {
-                const response = await fetch(`/modelos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI(`/modelos/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('editModeloModal')).hide();
                 mostrarToast('Modelo atualizado com sucesso!');
                 mostrarGerenciamentoModelos();
@@ -215,8 +243,8 @@
         async function apagarModelo(id) {
             if (!confirm(`Tem a certeza?`)) return;
             try {
-                const response = await fetch(`/modelos/${id}`, { method: 'DELETE' });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI(`/modelos/${id}`, { method: 'DELETE' });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 document.getElementById(`modelo-${id}`)?.remove();
                 mostrarToast('Modelo apagado com sucesso!');
             } catch (e) { mostrarToast(e.message, 'error'); }
@@ -226,9 +254,9 @@
         async function mostrarGerenciamentoProdutos() {
             mostrarCarregamento();
             try {
-                const [resProds, resModelos] = await Promise.all([fetch('/produtos'), fetch('/modelos')]);
-                if (!resProds.ok) throw new Error('Falha ao carregar produtos.');
-                if (!resModelos.ok) throw new Error('Falha ao carregar modelos.');
+                const [resProds, resModelos] = await Promise.all([fetchAPI('/produtos'), fetchAPI('/modelos')]);
+                if (!resProds || !resProds.ok) throw new Error('Falha ao carregar produtos.');
+                if (!resModelos || !resModelos.ok) throw new Error('Falha ao carregar modelos.');
                 const produtos = await resProds.json();
                 const modelos = await resModelos.json();
                 todosOsProdutos = produtos;
@@ -245,8 +273,8 @@
             event.preventDefault();
             const payload = { nome: document.getElementById('produto-nome').value.trim(), id_modelo_celular: parseInt(document.getElementById('produto-modelo-select').value), tipo: document.getElementById('produto-tipo').value.trim(), material: document.getElementById('produto-material').value.trim() || null, preco_venda: parseFloat(document.getElementById('produto-preco-venda').value), preco_custo: document.getElementById('produto-preco-custo').value ? parseFloat(document.getElementById('produto-preco-custo').value) : null };
             try {
-                const response = await fetch('/produtos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI('/produtos', { method: 'POST', body: JSON.stringify(payload) });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 mostrarToast('Produto adicionado com sucesso!');
                 mostrarGerenciamentoProdutos();
             } catch (e) { mostrarToast(e.message, 'error'); }
@@ -271,8 +299,8 @@
             const id = document.getElementById('edit-produto-id').value;
             const payload = { nome: document.getElementById('edit-produto-nome').value.trim(), id_modelo_celular: parseInt(document.getElementById('edit-produto-modelo-select').value), tipo: document.getElementById('edit-produto-tipo').value.trim(), material: document.getElementById('edit-produto-material').value.trim() || null, preco_venda: parseFloat(document.getElementById('edit-produto-preco-venda').value), preco_custo: document.getElementById('edit-produto-preco-custo').value ? parseFloat(document.getElementById('edit-produto-preco-custo').value) : null };
             try {
-                const response = await fetch(`/produtos/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI(`/produtos/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('editProdutoModal')).hide();
                 mostrarToast('Produto atualizado com sucesso!');
                 mostrarGerenciamentoProdutos();
@@ -281,8 +309,8 @@
         async function apagarProduto(id) {
             if (!confirm(`Tem a certeza?`)) return;
             try {
-                const response = await fetch(`/produtos/${id}`, { method: 'DELETE' });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI(`/produtos/${id}`, { method: 'DELETE' });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 document.getElementById(`produto-${id}`)?.remove();
                 mostrarToast('Produto apagado com sucesso!');
             } catch (e) { mostrarToast(e.message, 'error'); }
@@ -300,8 +328,8 @@
             mostrarCarregamento('tabela-estoque-container');
 
             try {
-                const response = await fetch(`/estoque/produto/${produtoId}`);
-                if (!response.ok) throw new Error('Falha ao carregar variações de estoque.');
+                const response = await fetchAPI(`/estoque/produto/${produtoId}`);
+                if (!response || !response.ok) throw new Error('Falha ao carregar variações de estoque.');
                 const variacoes = await response.json();
                 variacoesAtuais = variacoes;
 
@@ -334,8 +362,8 @@
             if (fotoInput.files.length > 0) formData.append('foto', fotoInput.files[0]);
 
             try {
-                const response = await fetch('/estoque', { method: 'POST', body: formData });
-                if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || 'Falha ao adicionar variação.'); }
+                const response = await fetchAPI('/estoque', { method: 'POST', body: formData });
+                if (!response || !response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || 'Falha ao adicionar variação.'); }
                 form.reset();
                 const nomeProduto = document.getElementById('estoque-produto-titulo').innerText.replace('Produto: ', '');
                 mostrarToast('Variação adicionada com sucesso!');
@@ -345,8 +373,8 @@
         async function apagarVariacao(variacaoId, produtoId, nomeProduto) {
             if (!confirm(`Tem a certeza que deseja apagar a variação com ID ${variacaoId}?`)) return;
             try {
-                const response = await fetch(`/estoque/${variacaoId}`, { method: 'DELETE' });
-                if (!response.ok) {
+                const response = await fetchAPI(`/estoque/${variacaoId}`, { method: 'DELETE' });
+                if (!response || !response.ok) {
                     try { const errorData = await response.json(); throw new Error(errorData.detail); } 
                     catch (e) { throw new Error(`Falha ao apagar variação. Status: ${response.status}`); }
                 }
@@ -385,8 +413,8 @@
             }
 
             try {
-                const response = await fetch(`/estoque/${variacaoId}`, { method: 'PUT', body: formData });
-                if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || 'Falha ao atualizar variação.'); }
+                const response = await fetchAPI(`/estoque/${variacaoId}`, { method: 'PUT', body: formData });
+                if (!response || !response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || 'Falha ao atualizar variação.'); }
                 
                 bootstrap.Modal.getInstance(document.getElementById('editVariacaoModal')).hide();
                 mostrarToast('Variação atualizada com sucesso!');
@@ -398,8 +426,8 @@
         async function mostrarGerenciamentoFornecedores() {
             mostrarCarregamento();
             try {
-                const response = await fetch('/fornecedores');
-                if (!response.ok) throw new Error('Falha ao carregar fornecedores.');
+                const response = await fetchAPI('/fornecedores');
+                if (!response || !response.ok) throw new Error('Falha ao carregar fornecedores.');
                 const fornecedores = await response.json();
                 todosOsFornecedores = fornecedores;
 
@@ -443,8 +471,8 @@
             event.preventDefault();
             const payload = { nome: document.getElementById('fornecedor-nome').value.trim(), contato_telefone: document.getElementById('fornecedor-telefone').value.trim() || null, contato_email: document.getElementById('fornecedor-email').value.trim() || null };
             try {
-                const response = await fetch('/fornecedores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI('/fornecedores', { method: 'POST', body: JSON.stringify(payload) });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 mostrarToast('Fornecedor adicionado com sucesso!');
                 mostrarGerenciamentoFornecedores();
             } catch (e) { mostrarToast(e.message, 'error'); }
@@ -462,8 +490,8 @@
             const id = document.getElementById('edit-fornecedor-id').value;
             const payload = { nome: document.getElementById('edit-fornecedor-nome').value.trim(), contato_telefone: document.getElementById('edit-fornecedor-telefone').value.trim() || null, contato_email: document.getElementById('edit-fornecedor-email').value.trim() || null };
             try {
-                const response = await fetch(`/fornecedores/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI(`/fornecedores/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('editFornecedorModal')).hide();
                 mostrarToast('Fornecedor atualizado com sucesso!');
                 mostrarGerenciamentoFornecedores();
@@ -472,8 +500,8 @@
         async function apagarFornecedor(id) {
             if (!confirm(`Tem a certeza?`)) return;
             try {
-                const response = await fetch(`/fornecedores/${id}`, { method: 'DELETE' });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const response = await fetchAPI(`/fornecedores/${id}`, { method: 'DELETE' });
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 document.getElementById(`fornecedor-${id}`)?.remove();
                 mostrarToast('Fornecedor apagado com sucesso!');
             } catch (e) { mostrarToast(e.message, 'error'); }
@@ -486,8 +514,14 @@
             input.value = value;
         }
 
-        // Carrega a gestão de marcas por defeito ao abrir a página
-        window.onload = () => alternarMenu('marcas');
+        // --- INICIALIZAÇÃO ---
+        window.onload = () => {
+            if (!sessionStorage.getItem('accessToken')) {
+                window.location.href = window.location.origin + '/login';
+            } else {
+                alternarMenu('marcas');
+            }
+        };
 
     </script>
 </body>
