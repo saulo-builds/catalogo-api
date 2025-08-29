@@ -14,9 +14,12 @@
             height: 250px;
             object-fit: cover;
         }
+        .card-body-link {
+            text-decoration: none;
+            color: inherit;
+        }
         .card {
             transition: transform .2s, box-shadow .2s;
-            cursor: pointer;
         }
         .card:hover {
             transform: scale(1.03);
@@ -70,6 +73,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@10.2.7/dist/autoComplete.min.js"></script>
 
     <script>
+        const numeroWhatsapp = "5511998165455";
+
         async function procurarProdutos() {
             const query = document.getElementById('autoComplete').value;
             const resultadosDiv = document.getElementById('resultados');
@@ -85,27 +90,34 @@
                     resultadosDiv.innerHTML = '<div class="col-12"><div class="alert alert-warning text-center">Nenhum produto encontrado para este modelo.</div></div>';
                     return;
                 }
-
-                // A principal alteração está aqui: cada cartão é agora um link
-                resultadosDiv.innerHTML = produtos.map(p => `
+                
+                // Estrutura do cartão atualizada para ter o link E o botão
+                resultadosDiv.innerHTML = produtos.map(p => {
+                    const mensagem = encodeURIComponent(`Olá! Tenho interesse neste produto: ${p.produto_nome} (${p.cor}) para o modelo ${p.modelo_celular}.`);
+                    const linkWhatsapp = `https://api.whatsapp.com/send?phone=${numeroWhatsapp}&text=${mensagem}`;
+                    
+                    return `
                     <div class="col-md-4 col-lg-3">
-                        <a href="/produto?id=${p.id}" class="text-decoration-none text-dark">
-                            <div class="card h-100 shadow-sm">
+                        <div class="card h-100 shadow-sm">
+                            <a href="/produto?id=${p.id}" class="card-body-link">
                                 <img src="${p.url_foto || 'https://placehold.co/400x400/eee/ccc?text=S/Foto'}" class="card-img-top" alt="${p.produto_nome}">
-                                <div class="card-body d-flex flex-column">
+                                <div class="card-body">
                                     <h6 class="card-title">${p.produto_nome}</h6>
-                                    <p class="card-text text-muted small">${p.cor}</p>
-                                    <div class="mt-auto">
-                                        <p class="h5">R$ ${p.preco_venda.toFixed(2).replace('.', ',')}</p>
-                                        <span class="badge ${p.quantidade > 0 ? 'bg-success' : (p.disponivel_encomenda ? 'bg-warning text-dark' : 'bg-danger')}">
-                                            ${p.quantidade > 0 ? 'Em Estoque' : (p.disponivel_encomenda ? 'Sob Encomenda' : 'Indisponível')}
-                                        </span>
-                                    </div>
+                                    <p class="card-text text-muted small mb-2">${p.cor}</p>
+                                    <p class="h5">R$ ${p.preco_venda.toFixed(2).replace('.', ',')}</p>
+                                    <span class="badge ${p.quantidade > 0 ? 'bg-success' : (p.disponivel_encomenda ? 'bg-warning text-dark' : 'bg-danger')}">
+                                        ${p.quantidade > 0 ? 'Em Estoque' : (p.disponivel_encomenda ? 'Sob Encomenda' : 'Indisponível')}
+                                    </span>
                                 </div>
+                            </a>
+                            <div class="card-footer bg-transparent border-top-0 pb-3">
+                                <a href="${linkWhatsapp}" class="btn btn-dark w-100" target="_blank" onclick="event.stopPropagation()">
+                                    <i class="bi bi-whatsapp"></i> Pedir Informação
+                                </a>
                             </div>
-                        </a>
-                    </div>
-                `).join('');
+                        </div>
+                    </div>`
+                }).join('');
             } catch (error) {
                 resultadosDiv.innerHTML = `<div class="col-12"><div class="alert alert-danger text-center">Ocorreu um erro ao buscar os produtos. Tente novamente.</div></div>`;
                 console.error('Erro na busca:', error);
