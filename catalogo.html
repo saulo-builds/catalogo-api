@@ -4,85 +4,117 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Catálogo de Acessórios</title>
-    <!-- Link para o CSS do Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Ícones do Bootstrap -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <!-- CSS da Biblioteca de Autocomplete -->
+    <!-- CSS para o Autocomplete -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@10.2.7/dist/css/autoComplete.min.css">
     <style>
-        /* Pequenos ajustes de estilo */
         .card-img-top {
             width: 100%;
             height: 250px;
             object-fit: cover;
         }
-        .preco {
-            font-size: 1.25rem;
-            font-weight: bold;
-            color: #198754; /* Verde do Bootstrap */
+        .card {
+            transition: transform .2s, box-shadow .2s;
+            cursor: pointer;
         }
-        /* Ajuste para o autocomplete não ficar atrás do menu */
-        #autoComplete_list_1 {
-            z-index: 1050; 
+        .card:hover {
+            transform: scale(1.03);
+            box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+        }
+        #autoComplete_list {
+            z-index: 1050;
         }
     </style>
 </head>
 <body class="bg-light">
-
     <nav class="navbar navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="/catalogo">
-                <i class="bi bi-phone"></i>
+                <i class="bi bi-phone-flip"></i>
                 Catálogo de Acessórios da Loja
             </a>
         </div>
     </nav>
 
-    <div class="container mt-4">
-        <!-- Secção de Filtros -->
-        <div class="card mb-4 shadow-sm">
-            <div class="card-body">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-10">
-                        <label for="filtro-modelo" class="form-label"><strong>Digite o modelo do seu telemóvel:</strong></label>
-                        <input type="text" id="filtro-modelo" class="form-control form-control-lg" placeholder="Ex: Galaxy S23, iPhone 15 Pro..." autocomplete="off">
-                    </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-primary btn-lg w-100" onclick="procurarProdutos()">
-                            <i class="bi bi-search"></i> Procurar
-                        </button>
+    <div class="container my-4">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Digite o modelo do seu telemóvel:</h5>
+                        <div class="input-group">
+                            <input type="text" id="autoComplete" class="form-control form-control-lg" placeholder="Ex: Galaxy S24, iPhone 15 Pro...">
+                            <button class="btn btn-primary" type="button" onclick="procurarProdutos()">
+                                <i class="bi bi-search"></i> Procurar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Secção de Resultados -->
-        <div id="resultados-catalogo" class="row g-4">
-            <!-- Os cartões dos produtos serão inseridos aqui pelo JavaScript -->
-            <div class="col-12">
-                <div class="alert alert-info">
+        <div id="resultados" class="row mt-4 g-4">
+            <!-- Os cartões de produto serão inseridos aqui -->
+            <div id="mensagem-inicial" class="col-12">
+                <div class="alert alert-info text-center">
                     Digite o modelo do seu telemóvel acima para ver os produtos disponíveis.
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Link para o JavaScript do Bootstrap -->
+    <!-- JavaScript do Bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- JS da Biblioteca de Autocomplete -->
+    <!-- JavaScript para o Autocomplete -->
     <script src="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@10.2.7/dist/autoComplete.min.js"></script>
 
-    <!-- Nosso JavaScript para o catálogo -->
     <script>
-        const resultadosDiv = document.getElementById('resultados-catalogo');
-        const filtroInput = document.getElementById('filtro-modelo');
-        const numeroWhatsapp = "5511998165455"; // O seu número de WhatsApp
+        async function procurarProdutos() {
+            const query = document.getElementById('autoComplete').value;
+            const resultadosDiv = document.getElementById('resultados');
+            
+            resultadosDiv.innerHTML = '<div class="col-12 d-flex justify-content-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
 
-        // --- INICIALIZAÇÃO DO AUTOCOMPLETE ---
+            try {
+                const response = await fetch(`/catalogo/search?q=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error('Erro na rede.');
+
+                const produtos = await response.json();
+                if (produtos.length === 0) {
+                    resultadosDiv.innerHTML = '<div class="col-12"><div class="alert alert-warning text-center">Nenhum produto encontrado para este modelo.</div></div>';
+                    return;
+                }
+
+                // A principal alteração está aqui: cada cartão é agora um link
+                resultadosDiv.innerHTML = produtos.map(p => `
+                    <div class="col-md-4 col-lg-3">
+                        <a href="/produto?id=${p.id}" class="text-decoration-none text-dark">
+                            <div class="card h-100 shadow-sm">
+                                <img src="${p.url_foto || 'https://placehold.co/400x400/eee/ccc?text=S/Foto'}" class="card-img-top" alt="${p.produto_nome}">
+                                <div class="card-body d-flex flex-column">
+                                    <h6 class="card-title">${p.produto_nome}</h6>
+                                    <p class="card-text text-muted small">${p.cor}</p>
+                                    <div class="mt-auto">
+                                        <p class="h5">R$ ${p.preco_venda.toFixed(2).replace('.', ',')}</p>
+                                        <span class="badge ${p.quantidade > 0 ? 'bg-success' : (p.disponivel_encomenda ? 'bg-warning text-dark' : 'bg-danger')}">
+                                            ${p.quantidade > 0 ? 'Em Estoque' : (p.disponivel_encomenda ? 'Sob Encomenda' : 'Indisponível')}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                `).join('');
+            } catch (error) {
+                resultadosDiv.innerHTML = `<div class="col-12"><div class="alert alert-danger text-center">Ocorreu um erro ao buscar os produtos. Tente novamente.</div></div>`;
+                console.error('Erro na busca:', error);
+            }
+        }
+
         const autoCompleteJS = new autoComplete({
-            selector: "#filtro-modelo",
-            placeHolder: "Ex: Galaxy S23, iPhone 15 Pro...",
+            selector: "#autoComplete",
+            placeHolder: "Ex: Galaxy S24, iPhone 15 Pro...",
             data: {
                 src: async (query) => {
                     try {
@@ -93,19 +125,6 @@
                         return error;
                     }
                 }
-                // A LINHA 'keys' FOI REMOVIDA DAQUI
-            },
-            resultsList: {
-                element: (list, data) => {
-                    if (!data.results.length) {
-                        // Cria uma mensagem de "não encontrado"
-                        const message = document.createElement("div");
-                        message.setAttribute("class", "no_result");
-                        message.innerHTML = `<span>Nenhum resultado encontrado para "${data.query}"</span>`;
-                        list.prepend(message);
-                    }
-                },
-                noResults: true,
             },
             resultItem: {
                 highlight: true
@@ -115,85 +134,18 @@
                     selection: (event) => {
                         const selection = event.detail.selection.value;
                         autoCompleteJS.input.value = selection;
-                        procurarProdutos(); // Procura automaticamente ao selecionar
+                        procurarProdutos();
                     }
                 }
             }
         });
 
-
-        // Adiciona um "ouvinte" para a tecla Enter no campo de texto
-        filtroInput.addEventListener('keypress', function(event) {
+        document.getElementById('autoComplete').addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
-                event.preventDefault(); // Impede o comportamento padrão do Enter
                 procurarProdutos();
             }
         });
-
-        async function procurarProdutos() {
-            const termoDeBusca = filtroInput.value.trim();
-            if (!termoDeBusca) {
-                resultadosDiv.innerHTML = '<div class="col-12"><div class="alert alert-warning">Por favor, digite um modelo para procurar.</div></div>';
-                return;
-            }
-
-            // Mostra um spinner de carregamento
-            resultadosDiv.innerHTML = '<div class="col-12 text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
-
-            try {
-                // Faz a chamada à nossa API de pesquisa
-                const response = await fetch(`/catalogo/search?q=${encodeURIComponent(termoDeBusca)}`);
-                if (!response.ok) {
-                    throw new Error('Ocorreu um erro ao buscar os produtos.');
-                }
-                const produtos = await response.json();
-
-                // Limpa a área de resultados
-                resultadosDiv.innerHTML = '';
-
-                if (produtos.length === 0) {
-                    resultadosDiv.innerHTML = '<div class="col-12"><div class="alert alert-info">Nenhum produto encontrado para este modelo.</div></div>';
-                    return;
-                }
-
-                // Cria um cartão para cada produto encontrado
-                produtos.forEach(produto => {
-                    const emEstoque = produto.quantidade > 0;
-                    const statusBadge = emEstoque 
-                        ? `<span class="badge bg-success">Em Estoque</span>`
-                        : (produto.disponivel_encomenda ? `<span class="badge bg-warning text-dark">Sob Encomenda</span>` : `<span class="badge bg-danger">Indisponível</span>`);
-
-                    // Cria a mensagem para o WhatsApp
-                    const mensagemWhatsapp = encodeURIComponent(`Olá! Tenho interesse neste produto: ${produto.produto_nome} (${produto.cor}) para o modelo ${produto.modelo_celular}.`);
-                    const linkWhatsapp = `https://wa.me/${numeroWhatsapp}?text=${mensagemWhatsapp}`;
-
-                    const cardHtml = `
-                        <div class="col-md-4 col-lg-3">
-                            <div class="card h-100 shadow-sm">
-                                <img src="${produto.url_foto || 'https://placehold.co/400x400/eee/ccc?text=S/Foto'}" class="card-img-top" alt="${produto.produto_nome}">
-                                <div class="card-body d-flex flex-column">
-                                    <h5 class="card-title">${produto.produto_nome}</h5>
-                                    <p class="card-text text-muted">${produto.cor}</p>
-                                    <div class="mt-auto">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <p class="preco mb-0">R$ ${produto.preco_venda.toFixed(2).replace('.', ',')}</p>
-                                            ${statusBadge}
-                                        </div>
-                                        <a href="${linkWhatsapp}" target="_blank" class="btn btn-dark w-100 mt-2">
-                                            <i class="bi bi-whatsapp"></i> Pedir Informação
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    resultadosDiv.innerHTML += cardHtml;
-                });
-
-            } catch (error) {
-                resultadosDiv.innerHTML = `<div class="col-12"><div class="alert alert-danger">${error.message}</div></div>`;
-            }
-        }
     </script>
 </body>
 </html>
+

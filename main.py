@@ -75,7 +75,6 @@ class ProdutoResponse(BaseModel):
     preco_venda: float
     modelo_celular: str
 
-# Modelo de resposta completo para o admin, incluindo preco_custo
 class ProdutoAdminResponse(ProdutoBase):
     id: int
 
@@ -116,6 +115,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+# Modelos ATUALIZADOS para a Página de Detalhes do Produto
 class VariacaoSimples(BaseModel):
     id: int
     cor: str
@@ -133,9 +133,12 @@ class DetalhesProdutoResponse(BaseModel):
 
 # --- Configuração do Banco de Dados ---
 DATABASE_URL_ENV = os.getenv("DATABASE_URL")
+
 if DATABASE_URL_ENV and DATABASE_URL_ENV.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL_ENV.replace("postgres://", "postgresql://", 1)
+    print("A usar a base de dados PostgreSQL do Render.")
+    DATABASE_URL = DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1)
 else:
+    print("A usar a base de dados local MariaDB/MySQL.")
     DATABASE_URL = "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
 
 try:
@@ -192,6 +195,7 @@ def ler_catalogo():
 def ler_pagina_produto():
     return FileResponse(os.path.join(BASE_DIR, 'produto.html'))
 
+# Endpoint ATUALIZADO para a Página de Detalhes do Produto
 @app.get("/produto/detalhes/{variacao_id}", response_model=DetalhesProdutoResponse)
 def get_detalhes_produto(variacao_id: int, db: Session = Depends(get_db)):
     query_selecionada = text("""
@@ -221,11 +225,11 @@ def get_detalhes_produto(variacao_id: int, db: Session = Depends(get_db)):
 
     variacao_selecionada = VariacaoSimples(
         id=variacao_selecionada_db[0], cor=variacao_selecionada_db[1], quantidade=variacao_selecionada_db[2],
-        url_foto=variacao_selecionada_db[3], disponivel_encomenda=variacao_selecionada_db[4]
+        url_foto=variacao_selecionada_db[3], disponivel_encomenda=bool(variacao_selecionada_db[4])
     )
 
     outras_variacoes = [
-        VariacaoSimples(id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3], disponivel_encomenda=row[4])
+        VariacaoSimples(id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3], disponivel_encomenda=bool(row[4]))
         for row in outras_variacoes_db
     ]
     
@@ -289,6 +293,35 @@ def listar_marcas(db: Session = Depends(get_db), current_user: dict = Depends(ge
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar marcas: {e}")
 
+@app.get("/modelos/search", response_model=List[str])
+def search_modelos(q: Optional[str] = None, db: Session = Depends(get_db)):
+    if not q:
+        return []
+    
+    search_term = f"%{q}%"
+    db_type = engine.dialect.name
+    like_operator = "ILIKE" if db_type == "postgresql" else "LIKE"
+    
+    query_sql = f"""
+        SELECT 
+            CONCAT(b.nome, ' ', m.nome_modelo) AS full_name
+        FROM modelos_celular AS m
+        JOIN marcas AS b ON m.id_marca = b.id
+        WHERE CONCAT(b.nome, ' ', m.nome_modelo) {like_operator} :search_term
+        ORDER BY full_name
+        LIMIT 10
+    """
+    
+    try:
+        resultado = db.execute(text(query_sql), {"search_term": search_term}).fetchall()
+        modelos = [row[0] for row in resultado]
+        return modelos
+    except Exception as e:
+        print(f"Erro na busca por autocompletar: {e}")
+        return []
+
+# ... (O resto do seu código CRUD para Marcas, Modelos, Produtos, Estoque, Fornecedores continua aqui) ...
+
 @app.post("/marcas", status_code=status.HTTP_201_CREATED)
 def criar_marca(marca: MarcaBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     try:
@@ -298,7 +331,7 @@ def criar_marca(marca: MarcaBase, db: Session = Depends(get_db), current_user: d
         return {"mensagem": f"Marca '{marca.nome}' criada com sucesso."}
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Marca já existente.")
+        raise HTTPException(status_code=400, detail="Já existe uma marca com este nome.")
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao criar marca: {e}")
@@ -350,34 +383,6 @@ def listar_modelos(db: Session = Depends(get_db), current_user: dict = Depends(g
         return modelos
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar modelos: {e}")
-
-@app.get("/modelos/search", response_model=List[str])
-def search_modelos(q: Optional[str] = None, db: Session = Depends(get_db)):
-    if not q:
-        return []
-    
-    search_term = f"%{q}%"
-    db_type = engine.dialect.name
-    like_operator = "ILIKE" if db_type == "postgresql" else "LIKE"
-    
-    query_sql = f"""
-        SELECT 
-            CONCAT(b.nome, ' ', m.nome_modelo) AS full_name
-        FROM modelos_celular AS m
-        JOIN marcas AS b ON m.id_marca = b.id
-        WHERE CONCAT(b.nome, ' ', m.nome_modelo) {like_operator} :search_term
-        ORDER BY full_name
-        LIMIT 10
-    """
-    
-    try:
-        resultado = db.execute(text(query_sql), {"search_term": search_term}).fetchall()
-        modelos = [row[0] for row in resultado]
-        return modelos
-    except Exception as e:
-        print(f"Erro na busca por autocompletar: {e}")
-        return []
-
 
 @app.post("/modelos", status_code=status.HTTP_201_CREATED)
 def criar_modelo(modelo: ModeloBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -445,10 +450,20 @@ def listar_produtos(db: Session = Depends(get_db), current_user: dict = Depends(
 @app.get("/produtos/{produto_id}/detalhes", response_model=ProdutoAdminResponse)
 def get_detalhes_produto_admin(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     query = text("SELECT id, nome, tipo, material, preco_venda, preco_custo, id_modelo_celular FROM produtos WHERE id = :id")
-    produto = db.execute(query, {"id": produto_id}).first()
-    if not produto:
+    produto_db = db.execute(query, {"id": produto_id}).first()
+    if not produto_db:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
-    return produto
+    
+    produto_dict = {
+        "id": produto_db[0],
+        "nome": produto_db[1],
+        "tipo": produto_db[2],
+        "material": produto_db[3],
+        "preco_venda": produto_db[4],
+        "preco_custo": produto_db[5],
+        "id_modelo_celular": produto_db[6]
+    }
+    return ProdutoAdminResponse(**produto_dict)
 
 @app.post("/produtos", status_code=status.HTTP_201_CREATED)
 def criar_produto(produto: ProdutoBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -564,10 +579,11 @@ def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), quantidad
     url_foto_final = url_foto_antiga
 
     if foto and foto.filename:
-        if url_foto_antiga:
+        if url_foto_antiga and "cloudinary" in url_foto_antiga:
             try:
-                public_id = url_foto_antiga.split("/")[-1].split(".")[0]
-                cloudinary.uploader.destroy(f"catalogo_api/{public_id}")
+                public_id_with_folder = "/".join(url_foto_antiga.split("/")[-2:])
+                public_id = os.path.splitext(public_id_with_folder)[0]
+                cloudinary.uploader.destroy(public_id)
             except Exception as e:
                 print(f"Aviso: não foi possível apagar a imagem antiga do Cloudinary: {e}")
 
@@ -605,10 +621,11 @@ def deletar_variacao_estoque(variacao_id: int, db: Session = Depends(get_db), cu
         db.execute(query, {"id": variacao_id})
         db.commit()
 
-        if url_foto_para_apagar:
+        if url_foto_para_apagar and "cloudinary" in url_foto_para_apagar:
             try:
-                public_id = url_foto_para_apagar.split("/")[-1].split(".")[0]
-                cloudinary.uploader.destroy(f"catalogo_api/{public_id}")
+                public_id_with_folder = "/".join(url_foto_para_apagar.split("/")[-2:])
+                public_id = os.path.splitext(public_id_with_folder)[0]
+                cloudinary.uploader.destroy(public_id)
             except Exception as e:
                 print(f"Aviso: não foi possível apagar a imagem do Cloudinary: {e}")
         
@@ -681,3 +698,4 @@ def deletar_fornecedor(fornecedor_id: int, db: Session = Depends(get_db), curren
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao deletar fornecedor: {e}")
+
