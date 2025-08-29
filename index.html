@@ -280,20 +280,26 @@
             } catch (e) { mostrarToast(e.message, 'error'); }
         }
         async function editarProduto(id) {
-            const produto = todosOsProdutos.find(p => p.id === id);
-            if (!produto) return mostrarToast('Produto não encontrado!', 'error');
-            const modeloDoProduto = todosOsModelos.find(m => `${m.marca_nome} ${m.nome_modelo}` === produto.modelo_celular);
-            if (!modeloDoProduto) return mostrarToast('Modelo do produto não encontrado!', 'error');
             const selModelos = document.getElementById('edit-produto-modelo-select');
             selModelos.innerHTML = todosOsModelos.map(m => `<option value="${m.id}">${m.marca_nome} ${m.nome_modelo}</option>`).join('');
-            document.getElementById('edit-produto-id').value = produto.id;
-            document.getElementById('edit-produto-nome').value = produto.nome;
-            selModelos.value = modeloDoProduto.id;
-            document.getElementById('edit-produto-tipo').value = produto.tipo;
-            document.getElementById('edit-produto-material').value = produto.material || '';
-            document.getElementById('edit-produto-preco-venda').value = produto.preco_venda;
-            document.getElementById('edit-produto-preco-custo').value = '';
-            new bootstrap.Modal(document.getElementById('editProdutoModal')).show();
+            
+            try {
+                const response = await fetchAPI(`/produtos/${id}/detalhes`);
+                if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
+                const produto = await response.json();
+
+                document.getElementById('edit-produto-id').value = produto.id;
+                document.getElementById('edit-produto-nome').value = produto.nome;
+                selModelos.value = produto.id_modelo_celular;
+                document.getElementById('edit-produto-tipo').value = produto.tipo;
+                document.getElementById('edit-produto-material').value = produto.material || '';
+                document.getElementById('edit-produto-preco-venda').value = produto.preco_venda;
+                document.getElementById('edit-produto-preco-custo').value = produto.preco_custo || '';
+                
+                new bootstrap.Modal(document.getElementById('editProdutoModal')).show();
+            } catch(e) {
+                mostrarToast(e.message, 'error');
+            }
         }
         async function salvarEdicaoProduto() {
             const id = document.getElementById('edit-produto-id').value;

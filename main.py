@@ -75,6 +75,7 @@ class ProdutoResponse(BaseModel):
     preco_venda: float
     modelo_celular: str
 
+# Modelo de resposta completo para o admin, incluindo preco_custo
 class ProdutoAdminResponse(ProdutoBase):
     id: int
 
