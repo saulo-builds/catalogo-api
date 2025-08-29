@@ -12,17 +12,27 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import os
+from dotenv import load_dotenv
 
-# Importa as funções do nosso novo módulo de segurança
+# Importa as bibliotecas do Cloudinary
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+
+load_dotenv()
 import seguranca
+
+# --- Configuração do Cloudinary ---
+cloudinary.config(
+    cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key = os.getenv("CLOUDINARY_API_KEY"),
+    api_secret = os.getenv("CLOUDINARY_API_SECRET"),
+    secure = True
+)
 
 # --- Definição de Caminhos ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-UPLOAD_DIRECTORY = os.path.join(STATIC_DIR, "images/")
-
-if not os.path.exists(UPLOAD_DIRECTORY):
-    os.makedirs(UPLOAD_DIRECTORY)
 
 # --- Modelos Pydantic ---
 class MarcaBase(BaseModel):
@@ -65,6 +75,9 @@ class ProdutoResponse(BaseModel):
     preco_venda: float
     modelo_celular: str
 
+class ProdutoAdminResponse(ProdutoBase):
+    id: int
+
 class EstoqueVariacaoBase(BaseModel):
     id_produto: int
     cor: str
@@ -101,6 +114,21 @@ class FornecedorBase(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class VariacaoSimples(BaseModel):
+    id: int
+    cor: str
+    quantidade: int
+    disponivel_encomenda: bool
+    url_foto: Optional[str] = None
+
+class DetalhesProdutoResponse(BaseModel):
+    produto_nome: str
+    modelo_celular: str
+    preco_venda: float
+    variacao_selecionada: VariacaoSimples
+    outras_variacoes: List[VariacaoSimples]
+
 
 # --- Configuração do Banco de Dados ---
 DATABASE_URL_ENV = os.getenv("DATABASE_URL")
@@ -158,6 +186,56 @@ def painel_admin():
 @app.get("/catalogo", include_in_schema=False)
 def ler_catalogo():
     return FileResponse(os.path.join(BASE_DIR, 'catalogo.html'))
+
+@app.get("/produto", include_in_schema=False)
+def ler_pagina_produto():
+    return FileResponse(os.path.join(BASE_DIR, 'produto.html'))
+
+@app.get("/produto/detalhes/{variacao_id}", response_model=DetalhesProdutoResponse)
+def get_detalhes_produto(variacao_id: int, db: Session = Depends(get_db)):
+    query_selecionada = text("""
+        SELECT ev.id, ev.cor, ev.quantidade, ev.url_foto, ev.disponivel_encomenda,
+               p.id as produto_id, p.nome as produto_nome, p.preco_venda,
+               CONCAT(b.nome, ' ', m.nome_modelo) AS modelo_celular
+        FROM estoque_variacoes AS ev
+        JOIN produtos AS p ON ev.id_produto = p.id
+        JOIN modelos_celular AS m ON p.id_modelo_celular = m.id
+        JOIN marcas AS b ON m.id_marca = b.id
+        WHERE ev.id = :variacao_id
+    """)
+    variacao_selecionada_db = db.execute(query_selecionada, {"variacao_id": variacao_id}).first()
+
+    if not variacao_selecionada_db:
+        raise HTTPException(status_code=404, detail="Variação de produto não encontrada.")
+
+    produto_id = variacao_selecionada_db[5]
+
+    query_outras = text("""
+        SELECT id, cor, quantidade, url_foto, disponivel_encomenda
+        FROM estoque_variacoes
+        WHERE id_produto = :produto_id
+        ORDER BY cor
+    """)
+    outras_variacoes_db = db.execute(query_outras, {"produto_id": produto_id}).fetchall()
+
+    variacao_selecionada = VariacaoSimples(
+        id=variacao_selecionada_db[0], cor=variacao_selecionada_db[1], quantidade=variacao_selecionada_db[2],
+        url_foto=variacao_selecionada_db[3], disponivel_encomenda=variacao_selecionada_db[4]
+    )
+
+    outras_variacoes = [
+        VariacaoSimples(id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3], disponivel_encomenda=row[4])
+        for row in outras_variacoes_db
+    ]
+    
+    return DetalhesProdutoResponse(
+        produto_nome=variacao_selecionada_db[6],
+        modelo_celular=variacao_selecionada_db[8],
+        preco_venda=variacao_selecionada_db[7],
+        variacao_selecionada=variacao_selecionada,
+        outras_variacoes=outras_variacoes
+    )
+
 
 @app.get("/catalogo/search", response_model=List[EstoqueVariacaoResponse])
 def procurar_no_catalogo(q: Optional[str] = None, db: Session = Depends(get_db)):
@@ -363,6 +441,14 @@ def listar_produtos(db: Session = Depends(get_db), current_user: dict = Depends(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar produtos: {e}")
 
+@app.get("/produtos/{produto_id}/detalhes", response_model=ProdutoAdminResponse)
+def get_detalhes_produto_admin(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    query = text("SELECT id, nome, tipo, material, preco_venda, preco_custo, id_modelo_celular FROM produtos WHERE id = :id")
+    produto = db.execute(query, {"id": produto_id}).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    return produto
+
 @app.post("/produtos", status_code=status.HTTP_201_CREATED)
 def criar_produto(produto: ProdutoBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     try:
@@ -446,11 +532,12 @@ def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db),
 def criar_variacao_estoque(id_produto: int = Form(...), cor: str = Form(...), quantidade: int = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     url_foto_final = None
     if foto and foto.filename:
-        nome_arquivo = f"{id_produto}_{cor.strip()}_{foto.filename}".replace(" ", "_")
-        file_path = os.path.join(UPLOAD_DIRECTORY, nome_arquivo)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(foto.file, buffer)
-        url_foto_final = f"/static/images/{nome_arquivo}"
+        try:
+            upload_result = cloudinary.uploader.upload(foto.file, folder="catalogo_api")
+            url_foto_final = upload_result.get("secure_url")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Erro ao fazer upload da imagem: {e}")
+
     try:
         query = text("""
             INSERT INTO estoque_variacoes (id_produto, cor, quantidade, disponivel_encomenda, url_foto)
@@ -471,17 +558,24 @@ def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), quantidad
     variacao_existente = db.execute(text("SELECT url_foto, id_produto FROM estoque_variacoes WHERE id = :id"), {"id": variacao_id}).first()
     if not variacao_existente:
         raise HTTPException(status_code=404, detail="Variação de estoque não encontrada.")
+    
     url_foto_antiga, id_produto = variacao_existente
     url_foto_final = url_foto_antiga
+
     if foto and foto.filename:
         if url_foto_antiga:
-            caminho_foto_antiga = os.path.join(BASE_DIR, url_foto_antiga.lstrip('/'))
-            if os.path.exists(caminho_foto_antiga): os.remove(caminho_foto_antiga)
-        nome_arquivo = f"{id_produto}_{cor.strip()}_{foto.filename}".replace(" ", "_")
-        file_path = os.path.join(UPLOAD_DIRECTORY, nome_arquivo)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(foto.file, buffer)
-        url_foto_final = f"/static/images/{nome_arquivo}"
+            try:
+                public_id = url_foto_antiga.split("/")[-1].split(".")[0]
+                cloudinary.uploader.destroy(f"catalogo_api/{public_id}")
+            except Exception as e:
+                print(f"Aviso: não foi possível apagar a imagem antiga do Cloudinary: {e}")
+
+        try:
+            upload_result = cloudinary.uploader.upload(foto.file, folder="catalogo_api")
+            url_foto_final = upload_result.get("secure_url")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Erro ao fazer upload da nova imagem: {e}")
+
     try:
         query = text("""
             UPDATE estoque_variacoes SET cor = :cor, quantidade = :quantidade, disponivel_encomenda = :disponivel_encomenda, url_foto = :url_foto
@@ -495,7 +589,6 @@ def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), quantidad
         raise HTTPException(status_code=400, detail="Já existe uma variação com esta cor para este produto.")
     except Exception as e:
         db.rollback()
-        if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar variação: {e}")
 
 @app.delete("/estoque/{variacao_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -503,14 +596,21 @@ def deletar_variacao_estoque(variacao_id: int, db: Session = Depends(get_db), cu
     variacao = db.execute(text("SELECT url_foto FROM estoque_variacoes WHERE id = :id"), {"id": variacao_id}).first()
     if not variacao:
         raise HTTPException(status_code=404, detail="Variação de estoque não encontrada.")
+    
+    url_foto_para_apagar = variacao[0]
+
     try:
         query = text("DELETE FROM estoque_variacoes WHERE id = :id")
         db.execute(query, {"id": variacao_id})
         db.commit()
-        url_foto = variacao[0]
-        if url_foto:
-            caminho_foto = os.path.join(BASE_DIR, url_foto.lstrip('/'))
-            if os.path.exists(caminho_foto): os.remove(caminho_foto)
+
+        if url_foto_para_apagar:
+            try:
+                public_id = url_foto_para_apagar.split("/")[-1].split(".")[0]
+                cloudinary.uploader.destroy(f"catalogo_api/{public_id}")
+            except Exception as e:
+                print(f"Aviso: não foi possível apagar a imagem do Cloudinary: {e}")
+        
         return
     except Exception as e:
         db.rollback()
