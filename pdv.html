@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDV - Gestão de Estoque</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- CSS para o Autocomplete -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@10.2.7/dist/css/autoComplete.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .product-card {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .product-img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 0.25rem;
+        }
+        .quantity-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .quantity-display {
+            font-size: 1.2rem;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+        }
+        /* Z-index para o autocomplete */
+        .autoComplete_wrapper {
+            position: relative;
+        }
+        .autoComplete_wrapper > ul {
+            z-index: 1050; /* Garante que fique acima de outros elementos */
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-box-seam"></i> Gestão de Estoque (PDV)
+            </a>
+            <div>
+                <span id="username-display" class="navbar-text me-3"></span>
+                <button class="btn btn-outline-light" onclick="fazerLogout()">Sair <i class="bi bi-box-arrow-right"></i></button>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Container para os Toasts (notificações) -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toast-title">Notificação</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="toast-body">
+                Mensagem aqui.
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="search-input" class="form-control form-control-lg" placeholder="Digite o modelo do telemóvel para procurar...">
+                    <button class="btn btn-primary" type="button" onclick="procurarProdutos()">
+                        <i class="bi bi-search"></i> Procurar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="results-container" class="mt-4">
+            <div class="alert alert-info">Digite o modelo do telemóvel acima para ver os produtos disponíveis.</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- JS para o Autocomplete -->
+    <script src="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@10.2.7/dist/autoComplete.min.js"></script>
+
+    <script>
+        // --- FUNÇÕES DE SEGURANÇA E UTILITÁRIAS ---
+        
+        async function fetchAPI(url, options = {}) {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                fazerLogout();
+                return null;
+            }
+
+            const defaultHeaders = { 'Authorization': `Bearer ${token}` };
+            if (!(options.body instanceof FormData)) {
+                defaultHeaders['Content-Type'] = 'application/json';
+            }
+
+            const config = { ...options, headers: { ...defaultHeaders, ...options.headers } };
+            const response = await fetch(url, config);
+
+            if (response.status === 401) {
+                fazerLogout();
+                return null;
+            }
+            return response;
+        }
+
+        function fazerLogout() {
+            localStorage.removeItem('accessToken');
+            window.location.href = '/login';
+        }
+
+        function mostrarToast(mensagem, tipo = 'success') {
+            const toastElement = document.getElementById('liveToast');
+            const toastBody = document.getElementById('toast-body');
+            const toastTitle = document.getElementById('toast-title');
+            
+            toastBody.innerText = mensagem;
+            toastElement.classList.remove('text-bg-success', 'text-bg-danger', 'text-bg-warning');
+            if (tipo === 'success') {
+                toastElement.classList.add('text-bg-success');
+                toastTitle.innerText = 'Sucesso!';
+            } else if (tipo === 'error') {
+                toastElement.classList.add('text-bg-danger');
+                toastTitle.innerText = 'Erro!';
+            } else {
+                toastElement.classList.add('text-bg-warning');
+                toastTitle.innerText = 'Aviso!';
+            }
+            new bootstrap.Toast(toastElement).show();
+        }
+
+        function decodificarToken(token) {
+            try {
+                return JSON.parse(atob(token.split('.')[1]));
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // --- LÓGICA DO PDV ---
+
+        async function procurarProdutos() {
+            const searchTerm = document.getElementById('search-input').value.trim();
+            const resultsContainer = document.getElementById('results-container');
+            
+            if (!searchTerm) {
+                resultsContainer.innerHTML = '<div class="alert alert-warning">Por favor, digite um termo de busca.</div>';
+                return;
+            }
+
+            resultsContainer.innerHTML = '<div class="d-flex justify-content-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">A procurar...</span></div></div>';
+
+            try {
+                // Usamos o endpoint PÚBLICO do catálogo para buscar os produtos
+                const response = await fetch(`/catalogo/search?q=${encodeURIComponent(searchTerm)}`);
+                if (!response.ok) throw new Error('Falha ao buscar produtos.');
+                
+                const produtos = await response.json();
+                renderizarResultados(produtos);
+            } catch (e) {
+                resultsContainer.innerHTML = `<div class="alert alert-danger">Erro: ${e.message}</div>`;
+            }
+        }
+        
+        function renderizarResultados(produtos) {
+            const resultsContainer = document.getElementById('results-container');
+            if (produtos.length === 0) {
+                resultsContainer.innerHTML = '<div class="alert alert-info">Nenhum produto encontrado para esta busca.</div>';
+                return;
+            }
+
+            const html = produtos.map(p => `
+                <div class="card mb-3">
+                    <div class="card-body product-card">
+                        <img src="${p.url_foto || 'https://placehold.co/60x60/6c757d/FFFFFF?text=?'}" class="product-img" alt="${p.produto_nome}">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title mb-1">${p.produto_nome} (${p.cor})</h5>
+                            <p class="card-text text-muted">${p.modelo_celular}</p>
+                        </div>
+                        <div class="quantity-control">
+                            <button class="btn btn-danger" onclick="atualizarEstoque(${p.id}, 'decrementar')">-</button>
+                            <span id="qtd-${p.id}" class="quantity-display">${p.quantidade}</span>
+                            <button class="btn btn-success" onclick="atualizarEstoque(${p.id}, 'incrementar')">+</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            resultsContainer.innerHTML = html;
+        }
+
+        async function atualizarEstoque(variacaoId, acao) {
+            try {
+                // Usamos o fetchAPI que já inclui o token de autenticação
+                const response = await fetchAPI(`/estoque/${variacaoId}/${acao}`, { method: 'POST' });
+                if (!response || !response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail);
+                }
+                const data = await response.json();
+                document.getElementById(`qtd-${variacaoId}`).innerText = data.nova_quantidade;
+                mostrarToast(data.mensagem);
+            } catch (e) {
+                mostrarToast(e.message, 'error');
+            }
+        }
+
+        // --- INICIALIZAÇÃO ---
+        window.onload = function() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            const userData = decodificarToken(token);
+            if(userData && userData.sub) {
+                document.getElementById('username-display').innerText = `Utilizador: ${userData.sub}`;
+            }
+
+            // Inicialização do Autocomplete
+            const autoCompleteJS = new autoComplete({
+                selector: "#search-input",
+                placeHolder: "Digite o modelo do telemóvel...",
+                data: {
+                    src: async (query) => {
+                        try {
+                            // O autocomplete usa um endpoint público
+                            const source = await fetch(`/modelos/search?q=${query}`);
+                            if (!source.ok) return [];
+                            const data = await source.json();
+                            return data;
+                        } catch (error) {
+                            console.error("Erro no autocomplete:", error);
+                            return error;
+                        }
+                    }
+                },
+                resultItem: {
+                    highlight: true
+                },
+                events: {
+                    input: {
+                        selection: (event) => {
+                            const selection = event.detail.selection.value;
+                            autoCompleteJS.input.value = selection;
+                            procurarProdutos();
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('search-input').addEventListener('keyup', function(event) {
+                if (event.key === "Enter") {
+                    procurarProdutos();
+                }
+            });
+        };
+    </script>
+</body>
+</html>

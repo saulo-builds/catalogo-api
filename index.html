@@ -31,6 +31,10 @@
                     <li class="nav-item">
                         <a class="nav-link" id="nav-fornecedores" href="#" onclick="alternarMenu('fornecedores')">Fornecedores</a>
                     </li>
+                    <li class="nav-item">
+                        <!-- Link para o PDV, abrindo em nova aba para melhor UX -->
+                        <a class="nav-link" id="nav-pdv" href="/pdv" target="_blank">PDV <i class="bi bi-box-arrow-up-right"></i></a>
+                    </li>
                 </ul>
                 <button class="btn btn-outline-light" onclick="fazerLogout()">Sair <i class="bi bi-box-arrow-right"></i></button>
             </div>
@@ -76,7 +80,7 @@
         // --- FUNÇÕES DE SEGURANÇA E UTILITÁRIAS ---
         
         async function fetchAPI(url, options = {}) {
-            const token = sessionStorage.getItem('accessToken');
+            const token = localStorage.getItem('accessToken');
             if (!token) {
                 fazerLogout();
                 return null;
@@ -98,7 +102,7 @@
         }
 
         function fazerLogout() {
-            sessionStorage.removeItem('accessToken');
+            localStorage.removeItem('accessToken');
             window.location.href = window.location.origin + '/login';
         }
 
@@ -120,6 +124,14 @@
 
             const toast = new bootstrap.Toast(toastElement);
             toast.show();
+        }
+
+        function decodificarToken(token) {
+            try {
+                return JSON.parse(atob(token.split('.')[1]));
+            } catch (e) {
+                return null;
+            }
         }
 
         function alternarMenu(secao) {
@@ -522,11 +534,22 @@
 
         // --- INICIALIZAÇÃO ---
         window.onload = () => {
-            if (!sessionStorage.getItem('accessToken')) {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
                 window.location.href = window.location.origin + '/login';
-            } else {
-                alternarMenu('marcas');
+                return;
             }
+
+            const userData = decodificarToken(token);
+            // Verifica se o utilizador tem a função 'admin'
+            if (!userData || userData.role !== 'admin') {
+                // Se não for admin, mostra uma mensagem e faz logout.
+                // Poderia também redirecionar para o PDV se fizesse sentido.
+                alert('Acesso negado. Esta área é restrita a administradores.');
+                fazerLogout();
+                return;
+            }
+            alternarMenu('marcas');
         };
 
     </script>
