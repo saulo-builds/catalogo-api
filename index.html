@@ -103,7 +103,7 @@
 
         function fazerLogout() {
             localStorage.removeItem('accessToken');
-            window.location.href = window.location.origin + '/login';
+            window.location.href = '/login';
         }
 
         function mostrarToast(mensagem, tipo = 'success') {
@@ -536,7 +536,7 @@
         window.onload = () => {
             const token = localStorage.getItem('accessToken');
             if (!token) {
-                window.location.href = window.location.origin + '/login';
+                window.location.href = '/login';
                 return;
             }
 

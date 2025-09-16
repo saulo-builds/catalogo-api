@@ -6,6 +6,13 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+# Imports para as novas funções de dependência
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
+
 # --- Configurações de Segurança ---
 # Lê a chave secreta da variável de ambiente.
 # Se não a encontrar, a aplicação irá falhar ao iniciar, o que é uma medida de segurança.
@@ -18,6 +25,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30 # O token será válido por 30 minutos
 
 # --- Hashing de Senhas ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# --- OAuth2 Scheme ---
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def verificar_senha(senha_plana: str, senha_hash: str) -> bool:
     """
@@ -55,3 +65,30 @@ def verificar_token(token: str) -> Optional[str]:
         return username
     except JWTError:
         return None
+
+# --- Funções de Dependência de Utilizador ---
+
+def get_user_from_db(db: Session, username: str):
+    """Função auxiliar para obter o utilizador da BD."""
+    query = text("SELECT username, role FROM usuarios WHERE username = :username")
+    return db.execute(query, {"username": username}).first()
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Dependência para obter o utilizador atual a partir do token."""
+    username = verificar_token(token)
+    if username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido ou expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = get_user_from_db(db, username)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Utilizador não encontrado")
+    return {"username": user[0], "role": user[1]}
+
+async def get_current_admin_user(current_user: dict = Depends(get_current_user)):
+    """Dependência para garantir que o utilizador é um administrador."""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado: Requer privilégios de administrador.")
+    return current_user

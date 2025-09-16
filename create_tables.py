@@ -95,6 +95,17 @@ def create_tables():
                 """))
                 print("Tabela 'produtos_fornecedores' criada ou já existente.")
 
+                connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) NOT NULL UNIQUE,
+                    senha_hash VARCHAR(255) NOT NULL,
+                    role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'atendente'))
+                );
+                """))
+                print("Tabela 'usuarios' criada ou já existente.")
+
+
                 trans.commit()
                 print("\nTodas as tabelas foram criadas com sucesso no banco de dados do Render!")
 

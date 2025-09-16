@@ -2,17 +2,16 @@
 
 import shutil
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.exc import OperationalError, IntegrityError
-from pydantic import BaseModel, field_validator
-import re
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 import os
 from dotenv import load_dotenv
+from pydantic import BaseModel # Manter para modelos específicos deste ficheiro
 
 # Importa as bibliotecas do Cloudinary
 import cloudinary
@@ -21,7 +20,11 @@ import cloudinary.api
 
 # Carrega as variáveis de ambiente PRIMEIRO
 load_dotenv()
+
 import seguranca
+import schemas
+from database import get_db, get_engine
+from routers import marcas, modelos
 
 # --- Configuração do Cloudinary ---
 cloudinary.config(
@@ -35,89 +38,7 @@ cloudinary.config(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-# --- Modelos Pydantic ---
-class MarcaBase(BaseModel):
-    nome: str
-    @field_validator('nome')
-    def trim_whitespace(cls, v): return v.strip()
-
-class MarcaResponse(BaseModel):
-    id: int
-    nome: str
-
-class ModeloBase(BaseModel):
-    nome_modelo: str
-    id_marca: int
-    @field_validator('nome_modelo')
-    def trim_whitespace(cls, v): return v.strip()
-
-class ModeloResponse(BaseModel):
-    id: int
-    nome_modelo: str
-    marca_nome: str
-
-class ProdutoBase(BaseModel):
-    nome: str
-    tipo: str
-    material: Optional[str] = None
-    preco_venda: float
-    preco_custo: Optional[float] = None
-    id_modelo_celular: int
-    @field_validator('nome', 'tipo', 'material')
-    def trim_whitespace(cls, v):
-        if v is not None: return v.strip()
-        return v
-
-class ProdutoResponse(BaseModel):
-    id: int
-    nome: str
-    tipo: str
-    material: Optional[str] = None
-    preco_venda: float
-    modelo_celular: str
-
-class ProdutoAdminResponse(ProdutoBase):
-    id: int
-
-class EstoqueVariacaoBase(BaseModel):
-    id_produto: int
-    cor: str
-    quantidade: int
-    disponivel_encomenda: bool = True
-    @field_validator('cor')
-    def trim_whitespace(cls, v): return v.strip()
-
-class EstoqueVariacaoResponse(BaseModel):
-    id: int
-    cor: str
-    quantidade: int
-    disponivel_encomenda: bool
-    url_foto: Optional[str] = None
-    produto_nome: str
-    modelo_celular: str
-    preco_venda: float
-
-class FornecedorBase(BaseModel):
-    nome: str
-    contato_telefone: Optional[str] = None
-    contato_email: Optional[str] = None
-    @field_validator('nome', 'contato_telefone', 'contato_email')
-    def trim_whitespace(cls, v):
-        if v is not None: return v.strip()
-        return v
-    @field_validator('contato_telefone')
-    def validar_telefone(cls, v):
-        if v is None or v == '': return v
-        regex = re.compile(r'^\(?\d{2}\)?[\s-]?\d{4,5}-?\d{4}$')
-        if not regex.match(v): raise ValueError('Número de telefone inválido.')
-        return v
-
-class FornecedorResponse(BaseModel):
-    id: int
-    nome: str
-    contato_telefone: Optional[str] = None
-    contato_email: Optional[str] = None
-
+# Modelos Pydantic que são específicos para os endpoints públicos deste ficheiro
 class VariacaoSelecionadaResponse(BaseModel):
     id: int
     cor: str
@@ -137,66 +58,10 @@ class DetalhesProdutoPublicoResponse(BaseModel):
     variacao_selecionada: VariacaoSelecionadaResponse
     outras_variacoes: List[OutraVariacaoResponse]
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class AssociacaoProdutoFornecedor(BaseModel):
-    id_fornecedor: int
-
-# --- Configuração do Banco de Dados ---
-DATABASE_URL_ENV = os.getenv("DATABASE_URL")
-
-if DATABASE_URL_ENV and DATABASE_URL_ENV.startswith("postgres://"):
-    print("A usar a base de dados PostgreSQL do Render.")
-    DATABASE_URL = DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1)
-else:
-    print("A usar a base de dados local MariaDB/MySQL.")
-    DATABASE_URL = "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
-
-try:
-    engine = create_engine(DATABASE_URL)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    with engine.connect() as connection:
-        print("Conexão com o banco de dados estabelecida com sucesso!")
-except Exception as e:
-    print(f"Erro ao conectar ao banco de dados: {e}")
-    exit()
-
-# --- Dependências ---
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-def get_user_from_db(db: Session, username: str):
-    query = text("SELECT username, role FROM usuarios WHERE username = :username")
-    return db.execute(query, {"username": username}).first()
-
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    username = seguranca.verificar_token(token)
-    if username is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido ou expirado",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    user = get_user_from_db(db, username)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Utilizador não encontrado")
-    return {"username": user[0], "role": user[1]}
-
-async def get_current_admin_user(current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Acesso negado: Requer privilégios de administrador.")
-    return current_user
-
 # --- Início da Aplicação FastAPI ---
 app = FastAPI()
+app.include_router(marcas.router)
+app.include_router(modelos.router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # --- Endpoints Públicos ---
@@ -222,6 +87,7 @@ def search_modelos(q: Optional[str] = None, db: Session = Depends(get_db)):
         return []
     
     search_term = f"%{q}%"
+    engine = get_engine()
     db_type = engine.dialect.name
     like_operator = "ILIKE" if db_type == "postgresql" else "LIKE"
     
@@ -243,11 +109,12 @@ def search_modelos(q: Optional[str] = None, db: Session = Depends(get_db)):
         print(f"Erro na busca por autocompletar: {e}")
         return []
 
-@app.get("/catalogo/search", response_model=List[EstoqueVariacaoResponse])
+@app.get("/catalogo/search", response_model=List[schemas.EstoqueVariacaoResponse])
 def procurar_no_catalogo(q: Optional[str] = None, db: Session = Depends(get_db)):
     # ... (código existente) ...
     if not q: return []
     search_term = f"%{q}%"
+    engine = get_engine()
     db_type = engine.dialect.name
     like_operator = "ILIKE" if db_type == "postgresql" else "LIKE"
     query_sql = f"""
@@ -262,7 +129,7 @@ def procurar_no_catalogo(q: Optional[str] = None, db: Session = Depends(get_db))
     """
     try:
         resultado = db.execute(text(query_sql), {"search_term": search_term}).fetchall()
-        variacoes = [EstoqueVariacaoResponse(id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3], disponivel_encomenda=row[4], produto_nome=row[5], modelo_celular=row[6], preco_venda=row[7]) for row in resultado]
+        variacoes = [schemas.EstoqueVariacaoResponse(id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3], disponivel_encomenda=row[4], produto_nome=row[5], modelo_celular=row[6], preco_venda=row[7]) for row in resultado]
         return variacoes
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar no catálogo: {e}")
@@ -323,7 +190,7 @@ def get_detalhes_publicos_produto(variacao_id: int, db: Session = Depends(get_db
     )
 
 # --- Endpoint de Autenticação ---
-@app.post("/token", response_model=Token)
+@app.post("/token", response_model=schemas.Token, tags=["Autenticação"])
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     query = text("SELECT username, senha_hash, role FROM usuarios WHERE username = :username")
     result = db.execute(query, {"username": form_data.username}).first()
@@ -345,131 +212,9 @@ def painel_admin():
 def painel_pdv():
     return FileResponse(os.path.join(BASE_DIR, 'pdv.html'))
 
-# ... (O resto do seu código CRUD para Marcas, Modelos, etc. continua aqui, inalterado) ...
-# (Cole aqui o restante do seu código CRUD para Marcas, Modelos, Produtos, etc., para manter o ficheiro completo)
-
-# --- Endpoints de Marcas (Protegidos para ADMIN) ---
-@app.get("/marcas", response_model=List[MarcaResponse])
-def listar_marcas(db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
-    try:
-        query = text("SELECT id, nome FROM marcas ORDER BY nome")
-        resultado = db.execute(query).fetchall()
-        marcas = [MarcaResponse(id=row[0], nome=row[1]) for row in resultado]
-        return marcas
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao buscar marcas: {e}")
-
-@app.post("/marcas", status_code=status.HTTP_201_CREATED)
-def criar_marca(marca: MarcaBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
-    try:
-        query = text("INSERT INTO marcas (nome) VALUES (:nome)")
-        db.execute(query, {"nome": marca.nome})
-        db.commit()
-        return {"mensagem": f"Marca '{marca.nome}' criada com sucesso."}
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Já existe uma marca com este nome.")
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao criar marca: {e}")
-
-@app.put("/marcas/{marca_id}")
-def atualizar_marca(marca_id: int, marca: MarcaBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
-    try:
-        query = text("UPDATE marcas SET nome = :nome WHERE id = :id")
-        resultado = db.execute(query, {"nome": marca.nome, "id": marca_id})
-        if resultado.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Marca não encontrada.")
-        db.commit()
-        return {"mensagem": f"Marca ID {marca_id} atualizada para '{marca.nome}'."}
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Já existe uma marca com este nome.")
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao atualizar marca: {e}")
-
-@app.delete("/marcas/{marca_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_marca(marca_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
-    try:
-        query = text("DELETE FROM marcas WHERE id = :id")
-        resultado = db.execute(query, {"id": marca_id})
-        if resultado.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Marca não encontrada.")
-        db.commit()
-        return
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Não é possível deletar a marca, pois ela possui modelos de celular vinculados.")
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao deletar marca: {e}")
-
-# --- Endpoints de Modelos de Celular (Protegidos para ADMIN) ---
-@app.get("/modelos", response_model=List[ModeloResponse])
-def listar_modelos(db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
-    try:
-        query = text("""
-            SELECT m.id, m.nome_modelo, b.nome AS marca_nome
-            FROM modelos_celular AS m
-            JOIN marcas AS b ON m.id_marca = b.id
-            ORDER BY b.nome, m.nome_modelo
-        """)
-        resultado = db.execute(query).fetchall()
-        modelos = [ModeloResponse(id=row[0], nome_modelo=row[1], marca_nome=row[2]) for row in resultado]
-        return modelos
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao buscar modelos: {e}")
-
-@app.post("/modelos", status_code=status.HTTP_201_CREATED)
-def criar_modelo(modelo: ModeloBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
-    try:
-        query = text("INSERT INTO modelos_celular (nome_modelo, id_marca) VALUES (:nome_modelo, :id_marca)")
-        db.execute(query, {"nome_modelo": modelo.nome_modelo, "id_marca": modelo.id_marca})
-        db.commit()
-        return {"mensagem": f"Modelo '{modelo.nome_modelo}' criado com sucesso."}
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Não foi possível criar o modelo. Verifique se o ID da marca é válido.")
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao criar modelo: {e}")
-
-@app.put("/modelos/{modelo_id}")
-def atualizar_modelo(modelo_id: int, modelo: ModeloBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
-    try:
-        query = text("UPDATE modelos_celular SET nome_modelo = :nome_modelo, id_marca = :id_marca WHERE id = :id")
-        resultado = db.execute(query, {"nome_modelo": modelo.nome_modelo, "id_marca": modelo.id_marca, "id": modelo_id})
-        if resultado.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Modelo não encontrado.")
-        db.commit()
-        return {"mensagem": f"Modelo ID {modelo_id} atualizado com sucesso."}
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Não foi possível atualizar o modelo. Verifique se o ID da marca é válido.")
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao atualizar modelo: {e}")
-
-@app.delete("/modelos/{modelo_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_modelo(modelo_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
-    try:
-        query = text("DELETE FROM modelos_celular WHERE id = :id")
-        resultado = db.execute(query, {"id": modelo_id})
-        if resultado.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Modelo não encontrado.")
-        db.commit()
-        return
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Não é possível deletar o modelo, pois ele possui produtos vinculados.")
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao deletar modelo: {e}")
-
 # --- Endpoints de Produtos (Protegidos para ADMIN) ---
-@app.get("/produtos", response_model=List[ProdutoResponse])
-def listar_produtos(db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.get("/produtos", response_model=List[schemas.ProdutoResponse], tags=["Produtos"])
+def listar_produtos(db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("""
             SELECT p.id, p.nome, p.tipo, p.material, p.preco_venda, CONCAT(b.nome, ' ', m.nome_modelo) AS modelo_celular
@@ -479,22 +224,22 @@ def listar_produtos(db: Session = Depends(get_db), current_user: dict = Depends(
             ORDER BY modelo_celular, p.nome
         """)
         resultado = db.execute(query).fetchall()
-        produtos = [ProdutoResponse(id=row[0], nome=row[1], tipo=row[2], material=row[3], preco_venda=row[4], modelo_celular=row[5]) for row in resultado]
+        produtos = [schemas.ProdutoResponse(id=row[0], nome=row[1], tipo=row[2], material=row[3], preco_venda=row[4], modelo_celular=row[5]) for row in resultado]
         return produtos
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar produtos: {e}")
 
-@app.get("/produtos/{produto_id}/detalhes", response_model=ProdutoAdminResponse)
-def get_detalhes_produto_admin(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.get("/produtos/{produto_id}/detalhes", response_model=schemas.ProdutoAdminResponse, tags=["Produtos"])
+def get_detalhes_produto_admin(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     query = text("SELECT id, nome, tipo, material, preco_venda, preco_custo, id_modelo_celular FROM produtos WHERE id = :id")
     produto_db = db.execute(query, {"id": produto_id}).first()
     if not produto_db:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     produto_dict = {"id": produto_db[0], "nome": produto_db[1], "tipo": produto_db[2], "material": produto_db[3], "preco_venda": produto_db[4], "preco_custo": produto_db[5], "id_modelo_celular": produto_db[6]}
-    return ProdutoAdminResponse(**produto_dict)
+    return schemas.ProdutoAdminResponse(**produto_dict)
 
-@app.post("/produtos", status_code=status.HTTP_201_CREATED)
-def criar_produto(produto: ProdutoBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.post("/produtos", status_code=status.HTTP_201_CREATED, tags=["Produtos"])
+def criar_produto(produto: schemas.ProdutoBase, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("""
             INSERT INTO produtos (nome, tipo, material, preco_venda, preco_custo, id_modelo_celular)
@@ -510,8 +255,8 @@ def criar_produto(produto: ProdutoBase, db: Session = Depends(get_db), current_u
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao criar produto: {e}")
 
-@app.put("/produtos/{produto_id}")
-def atualizar_produto(produto_id: int, produto: ProdutoBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.put("/produtos/{produto_id}", tags=["Produtos"])
+def atualizar_produto(produto_id: int, produto: schemas.ProdutoBase, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         params = produto.model_dump()
         params["id"] = produto_id
@@ -532,8 +277,8 @@ def atualizar_produto(produto_id: int, produto: ProdutoBase, db: Session = Depen
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar produto: {e}")
 
-@app.delete("/produtos/{produto_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_produto(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.delete("/produtos/{produto_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Produtos"])
+def deletar_produto(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("DELETE FROM produtos WHERE id = :id")
         resultado = db.execute(query, {"id": produto_id})
@@ -549,8 +294,8 @@ def deletar_produto(produto_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=500, detail=f"Erro ao deletar produto: {e}")
 
 # --- Endpoints de Estoque/Variações ---
-@app.get("/estoque/produto/{produto_id}", response_model=List[EstoqueVariacaoResponse])
-def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+@app.get("/estoque/produto/{produto_id}", response_model=List[schemas.EstoqueVariacaoResponse], tags=["Estoque"])
+def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_user)):
     try:
         query = text("""
             SELECT ev.id, ev.cor, ev.quantidade, ev.url_foto, ev.disponivel_encomenda, p.nome as produto_nome,
@@ -566,14 +311,14 @@ def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db),
         if not resultado:
             produto_existe = db.execute(text("SELECT id FROM produtos WHERE id = :id"), {"id": produto_id}).first()
             if not produto_existe: raise HTTPException(status_code=404, detail="Produto não encontrado.")
-        variacoes = [EstoqueVariacaoResponse(id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3], disponivel_encomenda=row[4], produto_nome=row[5], modelo_celular=row[6], preco_venda=row[7]) for row in resultado]
+        variacoes = [schemas.EstoqueVariacaoResponse(id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3], disponivel_encomenda=row[4], produto_nome=row[5], modelo_celular=row[6], preco_venda=row[7]) for row in resultado]
         return variacoes
     except Exception as e:
         if not isinstance(e, HTTPException): raise HTTPException(status_code=500, detail=f"Erro interno ao buscar variações: {e}")
         raise e
 
-@app.post("/estoque", status_code=status.HTTP_201_CREATED)
-def criar_variacao_estoque(id_produto: int = Form(...), cor: str = Form(...), quantidade: int = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.post("/estoque", status_code=status.HTTP_201_CREATED, tags=["Estoque"])
+def criar_variacao_estoque(id_produto: int = Form(...), cor: str = Form(...), quantidade: int = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     url_foto_final = None
     if foto and foto.filename:
         try:
@@ -596,8 +341,8 @@ def criar_variacao_estoque(id_produto: int = Form(...), cor: str = Form(...), qu
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao criar variação: {e}")
 
-@app.put("/estoque/{variacao_id}")
-def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), quantidade: int = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.put("/estoque/{variacao_id}", tags=["Estoque"])
+def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), quantidade: int = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     variacao_existente = db.execute(text("SELECT url_foto, id_produto FROM estoque_variacoes WHERE id = :id"), {"id": variacao_id}).first()
     if not variacao_existente:
         raise HTTPException(status_code=404, detail="Variação de estoque não encontrada.")
@@ -631,8 +376,8 @@ def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), quantidad
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar variação: {e}")
 
-@app.delete("/estoque/{variacao_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_variacao_estoque(variacao_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.delete("/estoque/{variacao_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Estoque"])
+def deletar_variacao_estoque(variacao_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     variacao = db.execute(text("SELECT url_foto FROM estoque_variacoes WHERE id = :id"), {"id": variacao_id}).first()
     if not variacao:
         raise HTTPException(status_code=404, detail="Variação de estoque não encontrada.")
@@ -654,18 +399,18 @@ def deletar_variacao_estoque(variacao_id: int, db: Session = Depends(get_db), cu
         raise HTTPException(status_code=500, detail=f"Erro ao deletar variação: {e}")
 
 # --- Endpoints de Fornecedores (Protegidos para ADMIN) ---
-@app.get("/fornecedores", response_model=List[FornecedorResponse])
-def listar_fornecedores(db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.get("/fornecedores", response_model=List[schemas.FornecedorResponse], tags=["Fornecedores"])
+def listar_fornecedores(db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("SELECT id, nome, contato_telefone, contato_email FROM fornecedores ORDER BY nome")
         resultado = db.execute(query).fetchall()
-        fornecedores = [FornecedorResponse(id=row[0], nome=row[1], contato_telefone=row[2], contato_email=row[3]) for row in resultado]
+        fornecedores = [schemas.FornecedorResponse(id=row[0], nome=row[1], contato_telefone=row[2], contato_email=row[3]) for row in resultado]
         return fornecedores
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar fornecedores: {e}")
 
-@app.post("/fornecedores", status_code=status.HTTP_201_CREATED)
-def criar_fornecedor(fornecedor: FornecedorBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.post("/fornecedores", status_code=status.HTTP_201_CREATED, tags=["Fornecedores"])
+def criar_fornecedor(fornecedor: schemas.FornecedorBase, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("""
             INSERT INTO fornecedores (nome, contato_telefone, contato_email) 
@@ -681,8 +426,8 @@ def criar_fornecedor(fornecedor: FornecedorBase, db: Session = Depends(get_db), 
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao criar fornecedor: {e}")
 
-@app.put("/fornecedores/{fornecedor_id}")
-def atualizar_fornecedor(fornecedor_id: int, fornecedor: FornecedorBase, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.put("/fornecedores/{fornecedor_id}", tags=["Fornecedores"])
+def atualizar_fornecedor(fornecedor_id: int, fornecedor: schemas.FornecedorBase, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         params = fornecedor.model_dump()
         params["id"] = fornecedor_id
@@ -702,8 +447,8 @@ def atualizar_fornecedor(fornecedor_id: int, fornecedor: FornecedorBase, db: Ses
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar fornecedor: {e}")
 
-@app.delete("/fornecedores/{fornecedor_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_fornecedor(fornecedor_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.delete("/fornecedores/{fornecedor_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Fornecedores"])
+def deletar_fornecedor(fornecedor_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("DELETE FROM fornecedores WHERE id = :id")
         resultado = db.execute(query, {"id": fornecedor_id})
@@ -719,8 +464,8 @@ def deletar_fornecedor(fornecedor_id: int, db: Session = Depends(get_db), curren
         raise HTTPException(status_code=500, detail=f"Erro ao deletar fornecedor: {e}")
 
 # --- Endpoints de Associação Produto-Fornecedor (Protegidos para ADMIN) ---
-@app.get("/produtos/{produto_id}/fornecedores", response_model=List[FornecedorResponse])
-def listar_fornecedores_do_produto(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.get("/produtos/{produto_id}/fornecedores", response_model=List[schemas.FornecedorResponse], tags=["Produtos"])
+def listar_fornecedores_do_produto(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("""
             SELECT f.id, f.nome, f.contato_telefone, f.contato_email
@@ -730,13 +475,13 @@ def listar_fornecedores_do_produto(produto_id: int, db: Session = Depends(get_db
             ORDER BY f.nome
         """)
         resultado = db.execute(query, {"produto_id": produto_id}).fetchall()
-        fornecedores = [FornecedorResponse(id=row[0], nome=row[1], contato_telefone=row[2], contato_email=row[3]) for row in resultado]
+        fornecedores = [schemas.FornecedorResponse(id=row[0], nome=row[1], contato_telefone=row[2], contato_email=row[3]) for row in resultado]
         return fornecedores
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar fornecedores do produto: {e}")
 
-@app.post("/produtos/{produto_id}/fornecedores", status_code=status.HTTP_201_CREATED)
-def adicionar_fornecedor_ao_produto(produto_id: int, associacao: AssociacaoProdutoFornecedor, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.post("/produtos/{produto_id}/fornecedores", status_code=status.HTTP_201_CREATED, tags=["Produtos"])
+def adicionar_fornecedor_ao_produto(produto_id: int, associacao: schemas.AssociacaoProdutoFornecedor, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("INSERT INTO produtos_fornecedores (id_produto, id_fornecedor) VALUES (:id_produto, :id_fornecedor)")
         db.execute(query, {"id_produto": produto_id, "id_fornecedor": associacao.id_fornecedor})
@@ -749,8 +494,8 @@ def adicionar_fornecedor_ao_produto(produto_id: int, associacao: AssociacaoProdu
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao associar fornecedor: {e}")
 
-@app.delete("/produtos/{produto_id}/fornecedores/{fornecedor_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remover_fornecedor_do_produto(produto_id: int, fornecedor_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_admin_user)):
+@app.delete("/produtos/{produto_id}/fornecedores/{fornecedor_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Produtos"])
+def remover_fornecedor_do_produto(produto_id: int, fornecedor_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     try:
         query = text("DELETE FROM produtos_fornecedores WHERE id_produto = :id_produto AND id_fornecedor = :id_fornecedor")
         resultado = db.execute(query, {"id_produto": produto_id, "id_fornecedor": fornecedor_id})
@@ -763,8 +508,8 @@ def remover_fornecedor_do_produto(produto_id: int, fornecedor_id: int, db: Sessi
         raise HTTPException(status_code=500, detail=f"Erro ao remover associação: {e}")
 
 # --- Endpoints para o PDV (Protegidos para todos os utilizadores logados) ---
-@app.post("/estoque/{variacao_id}/decrementar", status_code=200)
-def decrementar_estoque(variacao_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+@app.post("/estoque/{variacao_id}/decrementar", status_code=200, tags=["PDV"])
+def decrementar_estoque(variacao_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_user)):
     try:
         query = text("UPDATE estoque_variacoes SET quantidade = quantidade - 1 WHERE id = :id AND quantidade > 0")
         resultado = db.execute(query, {"id": variacao_id})
@@ -778,8 +523,8 @@ def decrementar_estoque(variacao_id: int, db: Session = Depends(get_db), current
         if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail="Erro ao decrementar estoque.")
 
-@app.post("/estoque/{variacao_id}/incrementar", status_code=200)
-def incrementar_estoque(variacao_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+@app.post("/estoque/{variacao_id}/incrementar", status_code=200, tags=["PDV"])
+def incrementar_estoque(variacao_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_user)):
     try:
         query = text("UPDATE estoque_variacoes SET quantidade = quantidade + 1 WHERE id = :id")
         resultado = db.execute(query, {"id": variacao_id})
