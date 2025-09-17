@@ -8,23 +8,41 @@ from dotenv import load_dotenv
 # para facilitar os testes locais.
 load_dotenv() 
 
+def get_database_url():
+    """
+    Pergunta ao utilizador qual banco de dados usar e retorna a URL de conexão.
+    """
+    while True:
+        target = input("Onde deseja criar/atualizar as tabelas? (1 - Local, 2 - Produção/Render): ").strip()
+        if target == '1':
+            print("\nA usar a base de dados local MariaDB/MySQL.")
+            return "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
+        elif target == '2':
+            DATABASE_URL_ENV = os.getenv("DATABASE_URL")
+            if not DATABASE_URL_ENV or not (DATABASE_URL_ENV.startswith("postgres://") or DATABASE_URL_ENV.startswith("postgresql://")):
+                print("\nERRO: A variável 'DATABASE_URL' para o Render não foi encontrada no seu ficheiro .env.")
+                print("Operação cancelada.")
+                return None
+
+            print("\nAVISO: Você está prestes a se conectar ao banco de dados de PRODUÇÃO no Render.")
+            confirm = input("Tem a certeza absoluta que deseja continuar? (s/N): ").lower()
+            if confirm != 's':
+                print("Operação cancelada.")
+                return None
+            
+            # Garante que a string de conexão use o driver psycopg2
+            return DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1).replace("postgresql://", "postgresql+psycopg2://", 1)
+        else:
+            print("Opção inválida. Por favor, digite '1' para Local ou '2' para Produção.")
+
 def create_tables():
-    # Pega a URL do banco de dados da variável de ambiente.
-    # Esta é a mesma lógica do main.py, mas focada no PostgreSQL.
-    db_url = os.getenv("DATABASE_URL")
-
-    if not db_url or not db_url.startswith("postgres://"):
-        print("Erro: A variável de ambiente DATABASE_URL não está definida ou não é uma URL PostgreSQL.")
-        print("Certifique-se de que a definiu antes de executar este script.")
-        return
-
-    # Converte a URL para o formato que o SQLAlchemy entende
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = get_database_url()
+    if not DATABASE_URL: return
     
     try:
-        engine = create_engine(db_url)
+        engine = create_engine(DATABASE_URL)
         with engine.connect() as connection:
-            print("Conexão com o banco de dados do Render estabelecida com sucesso!")
+            print("Conexão com o banco de dados estabelecida com sucesso!")
             
             # Usamos uma transação para garantir que todas as tabelas sejam criadas ou nenhuma.
             trans = connection.begin()
@@ -32,7 +50,6 @@ def create_tables():
                 # SQL para criar as tabelas (sintaxe para PostgreSQL)
                 # SERIAL é o equivalente ao AUTO_INCREMENT
                 # BOOLEAN é o equivalente ao TINYINT(1)
-                
                 connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS marcas (
                     id SERIAL PRIMARY KEY,
@@ -105,9 +122,21 @@ def create_tables():
                 """))
                 print("Tabela 'usuarios' criada ou já existente.")
 
+                connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS historico_estoque (
+                    id SERIAL PRIMARY KEY,
+                    id_variacao_estoque INTEGER NOT NULL REFERENCES estoque_variacoes(id) ON DELETE CASCADE,
+                    id_usuario INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+                    tipo_movimento VARCHAR(20) NOT NULL CHECK (tipo_movimento IN ('incremento', 'decremento')),
+                    quantidade_alterada INTEGER NOT NULL DEFAULT 1,
+                    data_hora TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    nova_quantidade_estoque INTEGER NOT NULL
+                );
+                """))
+                print("Tabela 'historico_estoque' criada ou já existente.")
 
                 trans.commit()
-                print("\nTodas as tabelas foram criadas com sucesso no banco de dados do Render!")
+                print("\nTodas as tabelas foram criadas/verificadas com sucesso!")
 
             except Exception as e:
                 print(f"Ocorreu um erro ao criar as tabelas: {e}")
@@ -117,6 +146,4 @@ def create_tables():
         print(f"Falha ao conectar ao banco de dados: {e}")
 
 if __name__ == "__main__":
-    # Para instalar a biblioteca dotenv: pip install python-dotenv
-    # Ela não é necessária para o deploy, apenas para facilitar a execução local.
     create_tables()

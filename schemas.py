@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, field_validator
 import re
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 # --- Modelos Pydantic ---
 class MarcaBase(BaseModel):
@@ -93,6 +93,24 @@ class Token(BaseModel):
 
 class AssociacaoProdutoFornecedor(BaseModel):
     id_fornecedor: int
+
+class RelatorioMovimentacaoResponse(BaseModel):
+    data_hora: str
+    produto_nome: str
+    cor_variacao: str
+    modelo_celular: str
+    usuario: str
+    tipo_movimento: Literal['Venda (Decremento)', 'Reposição (Incremento)']
+    quantidade_anterior: int
+    nova_quantidade: int
+
+class VendasDiariasResponse(BaseModel):
+    labels: List[str]
+    data: List[int]
+
+class TopProdutoResponse(BaseModel):
+    produto: str
+    vendas: int
 
 # Os modelos para a página pública de detalhes do produto podem ser movidos para cá também
 # se forem usados em mais algum lugar, ou podem ficar em main.py se forem muito específicos.

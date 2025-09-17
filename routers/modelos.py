@@ -21,7 +21,7 @@ router = APIRouter(
 def listar_modelos(db: Session = Depends(get_db)):
     try:
         query = text("""
-            SELECT m.id, m.nome_modelo, b.nome AS marca_nome
+            SELECT m.id, m.nome_modelo, b.nome as marca_nome
             FROM modelos_celular AS m
             JOIN marcas AS b ON m.id_marca = b.id
             ORDER BY b.nome, m.nome_modelo
@@ -32,11 +32,11 @@ def listar_modelos(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar modelos: {e}")
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=dict)
 def criar_modelo(modelo: schemas.ModeloBase, db: Session = Depends(get_db)):
     try:
         query = text("INSERT INTO modelos_celular (nome_modelo, id_marca) VALUES (:nome_modelo, :id_marca)")
-        db.execute(query, {"nome_modelo": modelo.nome_modelo, "id_marca": modelo.id_marca})
+        db.execute(query, modelo.model_dump())
         db.commit()
         return {"mensagem": f"Modelo '{modelo.nome_modelo}' criado com sucesso."}
     except IntegrityError:
@@ -46,11 +46,13 @@ def criar_modelo(modelo: schemas.ModeloBase, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao criar modelo: {e}")
 
-@router.put("/{modelo_id}")
+@router.put("/{modelo_id}", response_model=dict)
 def atualizar_modelo(modelo_id: int, modelo: schemas.ModeloBase, db: Session = Depends(get_db)):
     try:
+        params = modelo.model_dump()
+        params["id"] = modelo_id
         query = text("UPDATE modelos_celular SET nome_modelo = :nome_modelo, id_marca = :id_marca WHERE id = :id")
-        resultado = db.execute(query, {"nome_modelo": modelo.nome_modelo, "id_marca": modelo.id_marca, "id": modelo_id})
+        resultado = db.execute(query, params)
         if resultado.rowcount == 0:
             raise HTTPException(status_code=404, detail="Modelo não encontrado.")
         db.commit()

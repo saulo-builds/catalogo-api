@@ -3,22 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Gestão - Catálogo Inteligente</title>
+    <title>Dashboard - Painel Admin</title>
     <!-- Link para o CSS do Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Ícones do Bootstrap -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        .dashboard-card {
+            height: 400px;
+        }
+        .card-body canvas {
+            max-height: 320px;
+        }
+    </style>
 </head>
 <body class="bg-light">
 
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">Catálogo Admin</a>
+            <a class="navbar-brand" href="/admin"><i class="bi bi-speedometer2"></i> Painel Admin</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" id="nav-dashboard" href="#" onclick="alternarMenu('dashboard')">Dashboard</a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" id="nav-marcas" href="#" onclick="alternarMenu('marcas')">Marcas</a>
                     </li>
@@ -31,9 +42,10 @@
                     <li class="nav-item">
                         <a class="nav-link" id="nav-fornecedores" href="#" onclick="alternarMenu('fornecedores')">Fornecedores</a>
                     </li>
+                     <li class="nav-item"><a class="nav-link" href="/relatorio-pdv">Relatório PDV</a></li>
                     <li class="nav-item">
                         <!-- Link para o PDV, abrindo em nova aba para melhor UX -->
-                        <a class="nav-link" id="nav-pdv" href="/pdv" target="_blank">PDV <i class="bi bi-box-arrow-up-right"></i></a>
+                        <a class="nav-link" href="/pdv" target="_blank">Aceder ao PDV <i class="bi bi-box-arrow-up-right"></i></a>
                     </li>
                 </ul>
                 <button class="btn btn-outline-light" onclick="fazerLogout()">Sair <i class="bi bi-box-arrow-right"></i></button>
@@ -57,8 +69,7 @@
     <div class="container mt-4">
         <!-- O conteúdo dinâmico será carregado aqui -->
         <div id="conteudo-principal">
-            <h1>Bem-vindo ao Painel de Gestão!</h1>
-            <p>Selecione uma opção no menu acima para começar.</p>
+            <!-- O conteúdo inicial será o dashboard -->
         </div>
     </div>
 
@@ -72,6 +83,8 @@
 
     <!-- Link para o JavaScript do Bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Link para o Chart.js (para os gráficos) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- Nosso JavaScript -->
     <script>
@@ -138,13 +151,91 @@
             document.querySelectorAll('.navbar-nav .nav-link').forEach(link => link.classList.remove('active'));
             document.getElementById(`nav-${secao}`).classList.add('active');
             if (secao === 'marcas') mostrarGerenciamentoMarcas();
-            else if (secao === 'modelos') mostrarGerenciamentoModelos();
+            else if (secao === 'dashboard') mostrarDashboard();
+            else if (secao === 'modelos') mostrarGerenciamentoModelos();            
             else if (secao === 'produtos') mostrarGerenciamentoProdutos();
             else if (secao === 'fornecedores') mostrarGerenciamentoFornecedores();
         }
 
         function mostrarCarregamento(elementoId = 'conteudo-principal') {
             document.getElementById(elementoId).innerHTML = '<div class="d-flex justify-content-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        }
+
+        // --- GESTÃO DO DASHBOARD ---
+        function mostrarDashboard() {
+            const html = `
+                <h2 class="mb-4">Visão Geral do Negócio</h2>
+                <div class="row">
+                    <div class="col-lg-8 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-header"><i class="bi bi-bar-chart-line-fill"></i> Vendas nos Últimos 7 Dias</div>
+                            <div class="card-body d-flex justify-content-center align-items-center p-3"><canvas id="vendasDiariasChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-header"><i class="bi bi-trophy-fill"></i> Top 5 Produtos Vendidos</div>
+                            <div class="card-body d-flex justify-content-center align-items-center p-3"><canvas id="topProdutosChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('conteudo-principal').innerHTML = html;
+            // Carrega os dados dos gráficos após renderizar a estrutura
+            carregarGraficoVendasDiarias();
+            carregarGraficoTopProdutos();
+        }
+
+        async function carregarGraficoVendasDiarias() {
+            try {
+                const response = await fetchAPI('/relatorios/dashboard/vendas-por-dia');
+                if (!response || !response.ok) throw new Error("Falha ao carregar dados de vendas diárias.");
+                const dados = await response.json();
+                
+                new Chart(document.getElementById('vendasDiariasChart'), {
+                    type: 'line',
+                    data: {
+                        labels: dados.labels,
+                        datasets: [{
+                            label: 'Nº de Vendas',
+                            data: dados.data,
+                            fill: true,
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            } catch(e) {
+                console.error(e);
+                document.getElementById('vendasDiariasChart').parentElement.innerHTML = `<p class="text-danger text-center">${e.message}</p>`;
+            }
+        }
+
+        async function carregarGraficoTopProdutos() {
+            try {
+                const response = await fetchAPI('/relatorios/dashboard/top-produtos');
+                if (!response || !response.ok) throw new Error("Falha ao carregar dados de top produtos.");
+                const dados = await response.json();
+
+                new Chart(document.getElementById('topProdutosChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: dados.map(p => p.produto),
+                        datasets: [{
+                            label: 'Vendas',
+                            data: dados.map(p => p.vendas),
+                            backgroundColor: ['#0d6efd', '#6c757d', '#198754', '#dc3545', '#ffc107'],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            } catch(e) {
+                console.error(e);
+                document.getElementById('topProdutosChart').parentElement.innerHTML = `<p class="text-danger text-center">${e.message}</p>`;
+            }
         }
 
         // --- GESTÃO DE MARCAS ---
@@ -549,7 +640,7 @@
                 fazerLogout();
                 return;
             }
-            alternarMenu('marcas');
+            alternarMenu('dashboard'); // Inicia mostrando o dashboard
         };
 
     </script>
