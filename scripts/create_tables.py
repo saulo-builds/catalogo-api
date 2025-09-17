@@ -1,8 +1,14 @@
 # create_tables.py
 
 import os
+import sys
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
+
+# Adiciona o diretório raiz do projeto ao sys.path
+# Isso permite que o script encontre módulos como 'seguranca' e 'database' no futuro, se necessário.
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 # Carrega as variáveis de ambiente de um ficheiro .env (se existir)
 # para facilitar os testes locais.
@@ -129,6 +135,8 @@ def create_tables():
                     id_usuario INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
                     tipo_movimento VARCHAR(20) NOT NULL CHECK (tipo_movimento IN ('incremento', 'decremento')),
                     quantidade_alterada INTEGER NOT NULL DEFAULT 1,
+                    preco_venda_momento DECIMAL(10, 2),
+                    preco_custo_momento DECIMAL(10, 2),
                     data_hora TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     nova_quantidade_estoque INTEGER NOT NULL
                 );

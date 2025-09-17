@@ -66,36 +66,71 @@ def get_relatorio_movimentacoes_pdv(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório: {e}")
 
+@router.get("/dashboard/metricas-financeiras", response_model=schemas.MetricasFinanceirasResponse)
+def get_metricas_financeiras(db: Session = Depends(get_db)):
+    """
+    Calcula métricas financeiras chave para os últimos 7 dias.
+    - Faturação Total (Receita)
+    - Lucro Total
+    - Total de Vendas (transações de decremento)
+    - Ticket Médio
+    """
+    data_fim = date.today()
+    data_inicio = data_fim - timedelta(days=6)
+    datetime_inicio = datetime.combine(data_inicio, time.min)
+    datetime_fim = datetime.combine(data_fim, time.max)
+
+    query = text("""
+        SELECT
+            SUM(h.preco_venda_momento * h.quantidade_alterada) AS faturacao_total,
+            SUM((h.preco_venda_momento - COALESCE(h.preco_custo_momento, 0)) * h.quantidade_alterada) AS lucro_total,
+            COUNT(h.id) AS total_vendas
+        FROM historico_estoque h
+        WHERE h.tipo_movimento = 'decremento'
+          AND h.data_hora BETWEEN :inicio AND :fim
+    """)
+
+    try:
+        resultado = db.execute(query, {"inicio": datetime_inicio, "fim": datetime_fim}).first()
+        
+        faturacao = resultado[0] or 0.0
+        lucro = resultado[1] or 0.0
+        vendas = resultado[2] or 0
+
+        ticket_medio = faturacao / vendas if vendas > 0 else 0.0
+
+        return schemas.MetricasFinanceirasResponse(
+            faturacao_total=faturacao,
+            lucro_total=lucro,
+            total_vendas=vendas,
+            ticket_medio=ticket_medio
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao calcular métricas financeiras: {e}")
+
 @router.get("/dashboard/vendas-por-dia", response_model=schemas.VendasDiariasResponse)
 def get_vendas_resumo_diario(db: Session = Depends(get_db)):
     """
-    Retorna o número de vendas (decrementos) para cada um dos últimos 7 dias.
+    Retorna a FATURAÇÃO (receita) para cada um dos últimos 7 dias.
     """
     data_fim = date.today()
     data_inicio = data_fim - timedelta(days=6)
     
-    engine = get_engine()
-    db_type = engine.dialect.name
-
-    # A forma mais portável é gerar os dias em Python e fazer uma query para cada dia.
-    # É menos eficiente que uma única query SQL, mas funciona em ambos os bancos de dados
-    # sem sintaxe complexa e para um período de 7 dias a performance é aceitável.
     dias = [(data_inicio + timedelta(days=i)) for i in range(7)]
     labels = [d.strftime("%d/%m") for d in dias]
-    vendas_data = []
+    faturacao_data = []
 
     query_sql = text("""
-        SELECT COUNT(id) 
-        FROM historico_estoque 
+        SELECT SUM(preco_venda_momento * quantidade_alterada)
+        FROM historico_estoque h
         WHERE tipo_movimento = 'decremento' AND DATE(data_hora) = :dia
     """)
     try:
         for dia in dias:
-            # Para PostgreSQL, data_hora é 'timestamp with time zone'. Para MySQL é 'TIMESTAMP'.
-            # A função DATE() funciona em ambos para extrair a data.
-            vendas = db.execute(query_sql, {"dia": dia}).scalar()
-            vendas_data.append(vendas or 0)
-        return schemas.VendasDiariasResponse(labels=labels, data=vendas_data)
+            faturacao_dia = db.execute(query_sql, {"dia": dia}).scalar()
+            faturacao_data.append(faturacao_dia or 0.0)
+        return schemas.VendasDiariasResponse(labels=labels, data=faturacao_data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar resumo de vendas: {e}")
 

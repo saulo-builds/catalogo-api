@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile,
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from typing import List, Optional
+from typing import List, Optional, Literal
 import os
 
 # Importa as bibliotecas do Cloudinary
@@ -124,3 +124,77 @@ def deletar_variacao_estoque(variacao_id: int, db: Session = Depends(get_db), cu
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao deletar variação: {e}")
+
+@router.post("/{variacao_id}/{acao}", response_model=dict, tags=["PDV"])
+def atualizar_estoque_pdv(
+    variacao_id: int,
+    acao: Literal['incrementar', 'decrementar'],
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(seguranca.get_current_user)
+):
+    """
+    Incrementa ou decrementa o estoque de uma variação a partir do PDV,
+    registando o histórico da transação com os preços do momento para vendas.
+    """
+    try:
+        # 1. Obter dados da variação e do produto, e bloquear a linha para atualização (FOR UPDATE)
+        # para evitar condições de corrida em vendas simultâneas.
+        variacao_query = text("""
+            SELECT ev.quantidade, p.preco_venda, p.preco_custo
+            FROM estoque_variacoes ev
+            JOIN produtos p ON ev.id_produto = p.id
+            WHERE ev.id = :id FOR UPDATE
+        """)
+        variacao = db.execute(variacao_query, {"id": variacao_id}).first()
+
+        if not variacao:
+            raise HTTPException(status_code=404, detail="Variação de estoque não encontrada.")
+
+        quantidade_atual, preco_venda_atual, preco_custo_atual = variacao
+        quantidade_alterada = 1  # PDV altera de 1 em 1
+        
+        if acao == 'decrementar':
+            if quantidade_atual < quantidade_alterada:
+                raise HTTPException(status_code=400, detail="Estoque insuficiente para realizar a venda.")
+            nova_quantidade = quantidade_atual - quantidade_alterada
+            tipo_movimento = 'decremento'
+            mensagem = "Venda registrada com sucesso."
+            preco_venda_transacao = preco_venda_atual
+            preco_custo_transacao = preco_custo_atual
+        else:  # incrementar
+            nova_quantidade = quantidade_atual + quantidade_alterada
+            tipo_movimento = 'incremento'
+            mensagem = "Reposição de estoque registrada com sucesso."
+            preco_venda_transacao = None
+            preco_custo_transacao = None
+
+        # 2. Atualizar a quantidade no estoque
+        db.execute(text("UPDATE estoque_variacoes SET quantidade = :nova_quantidade WHERE id = :id"), 
+                   {"nova_quantidade": nova_quantidade, "id": variacao_id})
+
+        # 3. Obter ID do usuário
+        user_id = db.execute(text("SELECT id FROM usuarios WHERE username = :username"), 
+                             {"username": current_user['username']}).scalar()
+        if not user_id:
+            raise HTTPException(status_code=404, detail="Usuário da sessão não encontrado.")
+
+        # 4. Inserir no histórico com os preços do momento
+        history_query = text("""
+            INSERT INTO historico_estoque (id_variacao_estoque, id_usuario, tipo_movimento, quantidade_alterada, nova_quantidade_estoque, preco_venda_momento, preco_custo_momento)
+            VALUES (:id_variacao, :id_usuario, :tipo_movimento, :qtd_alterada, :nova_qtd, :preco_venda, :preco_custo)
+        """)
+        db.execute(history_query, {
+            "id_variacao": variacao_id, "id_usuario": user_id, "tipo_movimento": tipo_movimento,
+            "qtd_alterada": quantidade_alterada, "nova_qtd": nova_quantidade,
+            "preco_venda": preco_venda_transacao, "preco_custo": preco_custo_transacao,
+        })
+        
+        db.commit()
+        
+        return {"mensagem": mensagem, "nova_quantidade": nova_quantidade}
+    except HTTPException as http_exc:
+        db.rollback()
+        raise http_exc # Re-lança exceções HTTP para o FastAPI tratar
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ocorreu um erro interno no servidor: {e}")

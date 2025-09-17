@@ -188,7 +188,7 @@
                             <p class="card-text text-muted">${p.modelo_celular}</p>
                         </div>
                         <div class="quantity-control">
-                            <button class="btn btn-danger" onclick="atualizarEstoque(${p.id}, 'decrementar')">-</button>
+                            <button class="btn btn-danger" onclick="atualizarEstoque(${p.id}, 'decrementar', '${p.produto_nome.replace(/'/g, "\\'")}', '${p.cor.replace(/'/g, "\\'")}')">-</button>
                             <span id="qtd-${p.id}" class="quantity-display">${p.quantidade}</span>
                             <button class="btn btn-success" onclick="atualizarEstoque(${p.id}, 'incrementar')">+</button>
                         </div>
@@ -198,7 +198,14 @@
             resultsContainer.innerHTML = html;
         }
 
-        async function atualizarEstoque(variacaoId, acao) {
+        async function atualizarEstoque(variacaoId, acao, nomeProduto, cor) {
+            if (acao === 'decrementar') {
+                const mensagemConfirmacao = `Tem a certeza que deseja registar uma VENDA (diminuir 1 unidade) do produto:\n\n${nomeProduto} (${cor})?`;
+                if (!confirm(mensagemConfirmacao)) {
+                    return; // Ação cancelada pelo utilizador
+                }
+            }
+
             try {
                 // Usamos o fetchAPI que já inclui o token de autenticação
                 const response = await fetchAPI(`/estoque/${variacaoId}/${acao}`, { method: 'POST' });

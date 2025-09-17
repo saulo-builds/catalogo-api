@@ -106,11 +106,17 @@ class RelatorioMovimentacaoResponse(BaseModel):
 
 class VendasDiariasResponse(BaseModel):
     labels: List[str]
-    data: List[int]
+    data: List[float]
 
 class TopProdutoResponse(BaseModel):
     produto: str
     vendas: int
+
+class MetricasFinanceirasResponse(BaseModel):
+    faturacao_total: float
+    lucro_total: float
+    total_vendas: int
+    ticket_medio: float
 
 # Os modelos para a página pública de detalhes do produto podem ser movidos para cá também
 # se forem usados em mais algum lugar, ou podem ficar em main.py se forem muito específicos.

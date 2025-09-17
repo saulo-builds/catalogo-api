@@ -1,8 +1,14 @@
 # migracao_adicionar_role.py
 
 import os
+import sys
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
+
+# Adiciona o diretório raiz do projeto ao sys.path
+# Isso permite que o script encontre módulos como 'seguranca' e 'database' no futuro, se necessário.
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 # Carrega as variáveis de ambiente
 load_dotenv()

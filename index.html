@@ -165,10 +165,15 @@
         function mostrarDashboard() {
             const html = `
                 <h2 class="mb-4">Visão Geral do Negócio</h2>
+                <!-- KPIs -->
+                <div class="row mb-4" id="metricas-financeiras-container">
+                    <div class="col-12 text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">A carregar...</span></div></div>
+                </div>
+
                 <div class="row">
                     <div class="col-lg-8 mb-4">
                         <div class="card dashboard-card">
-                            <div class="card-header"><i class="bi bi-bar-chart-line-fill"></i> Vendas nos Últimos 7 Dias</div>
+                            <div class="card-header"><i class="bi bi-bar-chart-line-fill"></i> Faturação nos Últimos 7 Dias</div>
                             <div class="card-body d-flex justify-content-center align-items-center p-3"><canvas id="vendasDiariasChart"></canvas></div>
                         </div>
                     </div>
@@ -181,9 +186,59 @@
                 </div>
             `;
             document.getElementById('conteudo-principal').innerHTML = html;
-            // Carrega os dados dos gráficos após renderizar a estrutura
+            // Carrega os dados após renderizar a estrutura
+            carregarMetricasFinanceiras();
             carregarGraficoVendasDiarias();
             carregarGraficoTopProdutos();
+        }
+
+        async function carregarMetricasFinanceiras() {
+            const container = document.getElementById('metricas-financeiras-container');
+            try {
+                const response = await fetchAPI('/relatorios/dashboard/metricas-financeiras');
+                if (!response || !response.ok) throw new Error("Falha ao carregar métricas financeiras.");
+                const dados = await response.json();
+
+                const formatCurrency = (value) => `R$ ${value.toFixed(2).replace('.', ',')}`;
+
+                container.innerHTML = `
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column justify-content-center">
+                                <h6 class="card-subtitle mb-2 text-muted">Faturação (7d)</h6>
+                                <h4 class="card-title">${formatCurrency(dados.faturacao_total)}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column justify-content-center">
+                                <h6 class="card-subtitle mb-2 text-muted">Lucro (7d)</h6>
+                                <h4 class="card-title">${formatCurrency(dados.lucro_total)}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column justify-content-center">
+                                <h6 class="card-subtitle mb-2 text-muted">Vendas (7d)</h6>
+                                <h4 class="card-title">${dados.total_vendas}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column justify-content-center">
+                                <h6 class="card-subtitle mb-2 text-muted">Ticket Médio (7d)</h6>
+                                <h4 class="card-title">${formatCurrency(dados.ticket_medio)}</h4>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch(e) {
+                console.error(e);
+                container.innerHTML = `<div class="col-12"><p class="text-danger text-center">${e.message}</p></div>`;
+            }
         }
 
         async function carregarGraficoVendasDiarias() {
@@ -197,7 +252,7 @@
                     data: {
                         labels: dados.labels,
                         datasets: [{
-                            label: 'Nº de Vendas',
+                            label: 'Faturação (R$)',
                             data: dados.data,
                             fill: true,
                             backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -205,7 +260,32 @@
                             tension: 0.1
                         }]
                     },
-                    options: { responsive: true, maintainAspectRatio: false }
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'R$ ' + value.toFixed(2).replace('.', ',');
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (context.parsed.y !== null) {
+                                            label += ': ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 });
             } catch(e) {
                 console.error(e);
