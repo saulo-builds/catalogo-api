@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Literal
+from decimal import Decimal
 import os
 
 # Importa as bibliotecas do Cloudinary
@@ -25,7 +26,7 @@ router = APIRouter(
 def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_user)):
     try:
         query = text("""
-            SELECT ev.id, ev.cor, ev.quantidade, ev.url_foto, ev.disponivel_encomenda, p.nome as produto_nome,
+            SELECT ev.id, ev.cor, ev.quantidade, ev.url_foto, ev.disponivel_encomenda, ev.preco_custo, p.nome as produto_nome,
                    CONCAT(b.nome, ' ', m.nome_modelo) AS modelo_celular, p.preco_venda
             FROM estoque_variacoes AS ev
             JOIN produtos AS p ON ev.id_produto = p.id
@@ -38,14 +39,24 @@ def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db),
         if not resultado:
             produto_existe = db.execute(text("SELECT id FROM produtos WHERE id = :id"), {"id": produto_id}).first()
             if not produto_existe: raise HTTPException(status_code=404, detail="Produto não encontrado.")
-        variacoes = [schemas.EstoqueVariacaoResponse(id=row[0], cor=row[1], quantidade=row[2], url_foto=row[3], disponivel_encomenda=row[4], produto_nome=row[5], modelo_celular=row[6], preco_venda=row[7]) for row in resultado]
+        variacoes = [schemas.EstoqueVariacaoResponse(
+            id=row.id, 
+            cor=row.cor, 
+            quantidade=row.quantidade, 
+            url_foto=row.url_foto, 
+            disponivel_encomenda=row.disponivel_encomenda, 
+            preco_custo=row.preco_custo,
+            produto_nome=row.produto_nome, 
+            modelo_celular=row.modelo_celular, 
+            preco_venda=row.preco_venda
+        ) for row in resultado]
         return variacoes
     except Exception as e:
         if not isinstance(e, HTTPException): raise HTTPException(status_code=500, detail=f"Erro interno ao buscar variações: {e}")
         raise e
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=dict)
-def criar_variacao_estoque(id_produto: int = Form(...), cor: str = Form(...), quantidade: int = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
+def criar_variacao_estoque(id_produto: int = Form(...), cor: str = Form(...), quantidade: int = Form(...), preco_custo: float = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
     url_foto_final = None
     if foto and foto.filename:
         try:
@@ -55,10 +66,10 @@ def criar_variacao_estoque(id_produto: int = Form(...), cor: str = Form(...), qu
             raise HTTPException(status_code=500, detail=f"Erro ao fazer upload da imagem: {e}")
     try:
         query = text("""
-            INSERT INTO estoque_variacoes (id_produto, cor, quantidade, disponivel_encomenda, url_foto)
-            VALUES (:id_produto, :cor, :quantidade, :disponivel_encomenda, :url_foto)
+            INSERT INTO estoque_variacoes (id_produto, cor, quantidade, preco_custo, disponivel_encomenda, url_foto)
+            VALUES (:id_produto, :cor, :quantidade, :preco_custo, :disponivel_encomenda, :url_foto)
         """)
-        db.execute(query, {"id_produto": id_produto, "cor": cor.strip(), "quantidade": quantidade, "disponivel_encomenda": disponivel_encomenda, "url_foto": url_foto_final})
+        db.execute(query, {"id_produto": id_produto, "cor": cor.strip(), "quantidade": quantidade, "preco_custo": preco_custo, "disponivel_encomenda": disponivel_encomenda, "url_foto": url_foto_final})
         db.commit()
         return {"mensagem": "Variação de estoque criada com sucesso."}
     except IntegrityError:
@@ -69,7 +80,9 @@ def criar_variacao_estoque(id_produto: int = Form(...), cor: str = Form(...), qu
         raise HTTPException(status_code=500, detail=f"Erro ao criar variação: {e}")
 
 @router.put("/{variacao_id}", response_model=dict)
-def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), quantidade: int = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
+def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), disponivel_encomenda: bool = Form(...), foto: Optional[UploadFile] = File(None), db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_admin_user)):
+    # NOTA: A quantidade e o preço de custo não são editados aqui diretamente.
+    # Eles são alterados através dos endpoints de compra (incremento) e venda (decremento).
     variacao_existente = db.execute(text("SELECT url_foto, id_produto FROM estoque_variacoes WHERE id = :id"), {"id": variacao_id}).first()
     if not variacao_existente:
         raise HTTPException(status_code=404, detail="Variação de estoque não encontrada.")
@@ -90,10 +103,10 @@ def atualizar_variacao_estoque(variacao_id: int, cor: str = Form(...), quantidad
             raise HTTPException(status_code=500, detail=f"Erro ao fazer upload da nova imagem: {e}")
     try:
         query = text("""
-            UPDATE estoque_variacoes SET cor = :cor, quantidade = :quantidade, disponivel_encomenda = :disponivel_encomenda, url_foto = :url_foto
+            UPDATE estoque_variacoes SET cor = :cor, disponivel_encomenda = :disponivel_encomenda, url_foto = :url_foto
             WHERE id = :id
         """)
-        db.execute(query, {"cor": cor.strip(), "quantidade": quantidade, "disponivel_encomenda": disponivel_encomenda, "url_foto": url_foto_final, "id": variacao_id})
+        db.execute(query, {"cor": cor.strip(), "disponivel_encomenda": disponivel_encomenda, "url_foto": url_foto_final, "id": variacao_id})
         db.commit()
         return {"mensagem": "Variação de estoque atualizada com sucesso."}
     except IntegrityError:
@@ -125,6 +138,63 @@ def deletar_variacao_estoque(variacao_id: int, db: Session = Depends(get_db), cu
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao deletar variação: {e}")
 
+@router.post("/{variacao_id}/compra", response_model=dict, dependencies=[Depends(seguranca.get_current_admin_user)])
+def registrar_compra_estoque(
+    variacao_id: int,
+    compra: schemas.CompraEstoque,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(seguranca.get_current_user)
+):
+    """
+    Registra a entrada de novos itens no estoque (compra), recalculando o preço de custo médio ponderado.
+    """
+    try:
+        # Bloqueia a linha para evitar condições de corrida
+        variacao_query = text("SELECT quantidade, preco_custo FROM estoque_variacoes WHERE id = :id FOR UPDATE")
+        variacao_atual = db.execute(variacao_query, {"id": variacao_id}).first()
+
+        if not variacao_atual:
+            raise HTTPException(status_code=404, detail="Variação de estoque não encontrada.")
+
+        qtd_antiga, custo_antigo = variacao_atual
+        qtd_antiga = qtd_antiga or 0
+        # Garante que o custo antigo seja um Decimal, mesmo que seja nulo no banco
+        custo_antigo = custo_antigo or Decimal('0.00')
+
+        # Converte o custo da compra (float) para Decimal para precisão
+        custo_unitario_compra = Decimal(str(compra.custo_unitario))
+
+        # Calcula o novo custo médio ponderado usando Decimal
+        valor_estoque_antigo = Decimal(qtd_antiga) * custo_antigo
+        valor_compra_nova = Decimal(compra.quantidade) * custo_unitario_compra
+        
+        nova_qtd_total = qtd_antiga + compra.quantidade
+        novo_valor_total_estoque = valor_estoque_antigo + valor_compra_nova
+        
+        novo_custo_medio = novo_valor_total_estoque / Decimal(nova_qtd_total) if nova_qtd_total > 0 else Decimal('0.00')
+
+        # Atualiza a variação do estoque com os novos valores
+        update_query = text("UPDATE estoque_variacoes SET quantidade = :qtd, preco_custo = :custo WHERE id = :id")
+        db.execute(update_query, {"qtd": nova_qtd_total, "custo": novo_custo_medio, "id": variacao_id})
+
+        # Registra no histórico o custo unitário desta compra específica
+        user_id = db.execute(text("SELECT id FROM usuarios WHERE username = :username"), {"username": current_user['username']}).scalar()
+        history_query = text("""
+            INSERT INTO historico_estoque (id_variacao_estoque, id_usuario, tipo_movimento, quantidade_alterada, nova_quantidade_estoque, preco_custo_momento)
+            VALUES (:id_variacao, :id_usuario, 'incremento', :qtd_alterada, :nova_qtd, :custo_compra)
+        """)
+        db.execute(history_query, {"id_variacao": variacao_id, "id_usuario": user_id, "qtd_alterada": compra.quantidade, "nova_qtd": nova_qtd_total, "custo_compra": custo_unitario_compra})
+
+        db.commit()
+        return {"mensagem": "Compra registrada e estoque atualizado com sucesso.", "nova_quantidade": nova_qtd_total, "novo_custo_medio": round(float(novo_custo_medio), 2)}
+
+    except HTTPException as http_exc:
+        db.rollback()
+        raise http_exc
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ocorreu um erro interno: {e}")
+
 @router.post("/{variacao_id}/{acao}", response_model=dict, tags=["PDV"])
 def atualizar_estoque_pdv(
     variacao_id: int,
@@ -140,7 +210,7 @@ def atualizar_estoque_pdv(
         # 1. Obter dados da variação e do produto, e bloquear a linha para atualização (FOR UPDATE)
         # para evitar condições de corrida em vendas simultâneas.
         variacao_query = text("""
-            SELECT ev.quantidade, p.preco_venda, p.preco_custo
+            SELECT ev.quantidade, ev.preco_custo, p.preco_venda
             FROM estoque_variacoes ev
             JOIN produtos p ON ev.id_produto = p.id
             WHERE ev.id = :id FOR UPDATE
@@ -150,7 +220,7 @@ def atualizar_estoque_pdv(
         if not variacao:
             raise HTTPException(status_code=404, detail="Variação de estoque não encontrada.")
 
-        quantidade_atual, preco_venda_atual, preco_custo_atual = variacao
+        quantidade_atual, preco_custo_atual, preco_venda_atual = variacao
         quantidade_alterada = 1  # PDV altera de 1 em 1
         
         if acao == 'decrementar':

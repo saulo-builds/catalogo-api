@@ -1,0 +1,86 @@
+# scripts/migracao_mover_preco_custo.py
+
+import os
+import sys
+from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+load_dotenv()
+
+def get_database_url():
+    while True:
+        target = input("Onde deseja executar a migração? (1 - Local, 2 - Produção/Render): ").strip()
+        if target == '1':
+            print("\nA usar a base de dados local MariaDB/MySQL.")
+            return "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
+        elif target == '2':
+            DATABASE_URL_ENV = os.getenv("DATABASE_URL")
+            if not DATABASE_URL_ENV or not (DATABASE_URL_ENV.startswith("postgres://") or DATABASE_URL_ENV.startswith("postgresql://")):
+                print("\nERRO: A variável 'DATABASE_URL' para o Render não foi encontrada no seu ficheiro .env.")
+                return None
+            print("\nAVISO: Você está prestes a se conectar ao banco de dados de PRODUÇÃO no Render.")
+            if input("Tem a certeza absoluta que deseja continuar? (s/N): ").lower() != 's':
+                print("Operação cancelada.")
+                return None
+            return DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1).replace("postgresql://", "postgresql+psycopg2://", 1)
+        else:
+            print("Opção inválida. Por favor, digite '1' para Local ou '2' para Produção.")
+
+def run_migration():
+    db_url = get_database_url()
+    if not db_url: return
+
+    try:
+        engine = create_engine(db_url)
+        with engine.connect() as connection:
+            print("Conexão com o banco de dados estabelecida com sucesso!")
+            
+            trans = connection.begin()
+            try:
+                db_type = engine.dialect.name
+                
+                # 1. Adicionar a coluna 'preco_custo' em 'estoque_variacoes' se não existir
+                check_column_query = text("SELECT 1 FROM information_schema.columns WHERE table_name='estoque_variacoes' AND column_name='preco_custo'")
+                if not connection.execute(check_column_query).scalar():
+                    print("A adicionar a coluna 'preco_custo' à tabela 'estoque_variacoes'...")
+                    connection.execute(text("ALTER TABLE estoque_variacoes ADD COLUMN preco_custo DECIMAL(10, 2);"))
+                else:
+                    print("A coluna 'preco_custo' já existe em 'estoque_variacoes'.")
+
+                # 2. Verificar se a coluna 'preco_custo' ainda existe em 'produtos'
+                check_prod_column_query = text("SELECT 1 FROM information_schema.columns WHERE table_name='produtos' AND column_name='preco_custo'")
+                if connection.execute(check_prod_column_query).scalar():
+                    print("A migrar dados de 'produtos.preco_custo' para 'estoque_variacoes.preco_custo'...")
+                    # Esta query atualiza o custo nas variações com base no custo do seu produto pai.
+                    # É uma operação de 'melhor esforço' para migrar os dados existentes.
+                    update_query = text("""
+                        UPDATE estoque_variacoes ev
+                        SET preco_custo = p.preco_custo
+                        FROM produtos p
+                        WHERE ev.id_produto = p.id AND ev.preco_custo IS NULL;
+                    """)
+                    # Sintaxe diferente para MySQL
+                    if db_type == 'mysql':
+                         update_query = text("""
+                            UPDATE estoque_variacoes ev JOIN produtos p ON ev.id_produto = p.id
+                            SET ev.preco_custo = p.preco_custo
+                            WHERE ev.preco_custo IS NULL;
+                         """)
+                    connection.execute(update_query)
+                    
+                    print("A remover a coluna 'preco_custo' da tabela 'produtos'...")
+                    connection.execute(text("ALTER TABLE produtos DROP COLUMN preco_custo;"))
+                else:
+                    print("A coluna 'preco_custo' já não existe em 'produtos'.")
+
+                trans.commit()
+                print("\nMigração concluída com sucesso!")
+            except Exception as e:
+                print(f"Ocorreu um erro durante a migração: {e}")
+                trans.rollback()
+    except Exception as e:
+        print(f"Falha ao conectar ao banco de dados: {e}")
+
+if __name__ == "__main__":
+    run_migration()

@@ -30,7 +30,6 @@ class ProdutoBase(BaseModel):
     tipo: str
     material: Optional[str] = None
     preco_venda: float
-    preco_custo: Optional[float] = None
     id_modelo_celular: int
     @field_validator('nome', 'tipo', 'material')
     def trim_whitespace(cls, v):
@@ -65,6 +64,7 @@ class EstoqueVariacaoResponse(BaseModel):
     produto_nome: str
     modelo_celular: str
     preco_venda: float
+    preco_custo: Optional[float] = None
 
 class FornecedorBase(BaseModel):
     nome: str
@@ -117,6 +117,10 @@ class MetricasFinanceirasResponse(BaseModel):
     lucro_total: float
     total_vendas: int
     ticket_medio: float
+
+class CompraEstoque(BaseModel):
+    quantidade: int
+    custo_unitario: float
 
 # Os modelos para a página pública de detalhes do produto podem ser movidos para cá também
 # se forem usados em mais algum lugar, ou podem ficar em main.py se forem muito específicos.

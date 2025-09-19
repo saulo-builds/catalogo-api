@@ -35,19 +35,19 @@ def listar_produtos(db: Session = Depends(get_db)):
 
 @router.get("/{produto_id}/detalhes", response_model=schemas.ProdutoAdminResponse)
 def get_detalhes_produto_admin(produto_id: int, db: Session = Depends(get_db)):
-    query = text("SELECT id, nome, tipo, material, preco_venda, preco_custo, id_modelo_celular FROM produtos WHERE id = :id")
+    query = text("SELECT id, nome, tipo, material, preco_venda, id_modelo_celular FROM produtos WHERE id = :id")
     produto_db = db.execute(query, {"id": produto_id}).first()
     if not produto_db:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
-    produto_dict = {"id": produto_db[0], "nome": produto_db[1], "tipo": produto_db[2], "material": produto_db[3], "preco_venda": produto_db[4], "preco_custo": produto_db[5], "id_modelo_celular": produto_db[6]}
-    return schemas.ProdutoAdminResponse(**produto_dict)
+    # Mapeamento por nome para maior clareza
+    return schemas.ProdutoAdminResponse(id=produto_db.id, nome=produto_db.nome, tipo=produto_db.tipo, material=produto_db.material, preco_venda=produto_db.preco_venda, id_modelo_celular=produto_db.id_modelo_celular)
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=dict)
 def criar_produto(produto: schemas.ProdutoBase, db: Session = Depends(get_db)):
     try:
         query = text("""
-            INSERT INTO produtos (nome, tipo, material, preco_venda, preco_custo, id_modelo_celular)
-            VALUES (:nome, :tipo, :material, :preco_venda, :preco_custo, :id_modelo_celular)
+            INSERT INTO produtos (nome, tipo, material, preco_venda, id_modelo_celular)
+            VALUES (:nome, :tipo, :material, :preco_venda, :id_modelo_celular)
         """)
         db.execute(query, produto.model_dump())
         db.commit()
@@ -65,8 +65,7 @@ def atualizar_produto(produto_id: int, produto: schemas.ProdutoBase, db: Session
         params = produto.model_dump()
         params["id"] = produto_id
         query = text("""
-            UPDATE produtos SET nome = :nome, tipo = :tipo, material = :material, preco_venda = :preco_venda, 
-                           preco_custo = :preco_custo, id_modelo_celular = :id_modelo_celular 
+            UPDATE produtos SET nome = :nome, tipo = :tipo, material = :material, preco_venda = :preco_venda, id_modelo_celular = :id_modelo_celular 
             WHERE id = :id
         """)
         resultado = db.execute(query, params)
