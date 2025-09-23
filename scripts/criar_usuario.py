@@ -42,8 +42,13 @@ def get_database_url():
                 print("Operação cancelada.")
                 return None
             
-            # Garante que a string de conexão use o driver psycopg2
-            return DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1).replace("postgresql://", "postgresql+psycopg2://", 1)
+            # Garante que a string de conexão use o driver psycopg2 e sslmode=require
+            final_url = DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1)
+            if "?" not in final_url:
+                final_url += "?sslmode=require"
+            elif "sslmode=" not in final_url:
+                final_url += "&sslmode=require"
+            return final_url
         else:
             print("Opção inválida. Por favor, digite '1' para Local ou '2' para Produção.")
 

@@ -13,20 +13,41 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Carrega as variáveis de ambiente
 load_dotenv()
 
+def get_database_url():
+    """
+    Pergunta ao utilizador qual banco de dados usar e retorna a URL de conexão.
+    """
+    while True:
+        target = input("Onde deseja executar a migração? (1 - Local, 2 - Produção/Render): ").strip()
+        if target == '1':
+            print("\nA usar a base de dados local MariaDB/MySQL.")
+            return "mysql+mysqlconnector://root:@localhost/catalogo_inteligente"
+        elif target == '2':
+            DATABASE_URL_ENV = os.getenv("DATABASE_URL")
+            if not DATABASE_URL_ENV or not (DATABASE_URL_ENV.startswith("postgres://") or DATABASE_URL_ENV.startswith("postgresql://")):
+                print("\nERRO: A variável 'DATABASE_URL' para o Render não foi encontrada no seu ficheiro .env.")
+                print("Operação cancelada.")
+                return None
+
+            print("\nAVISO: Você está prestes a se conectar ao banco de dados de PRODUÇÃO no Render.")
+            confirm = input("Tem a certeza absoluta que deseja continuar? (s/N): ").lower()
+            if confirm != 's':
+                print("Operação cancelada.")
+                return None
+            
+            # Garante que a string de conexão use o driver psycopg2 e sslmode=require
+            final_url = DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1)
+            if "?" not in final_url:
+                final_url += "?sslmode=require"
+            elif "sslmode=" not in final_url:
+                final_url += "&sslmode=require"
+            return final_url
+        else:
+            print("Opção inválida. Por favor, digite '1' para Local ou '2' para Produção.")
+
 def run_migration():
-    db_url = os.getenv("DATABASE_URL")
-
-    if not db_url or not (db_url.startswith("postgres://") or db_url.startswith("postgresql://")):
-        print("Erro: A variável de ambiente DATABASE_URL não está definida ou não é uma URL PostgreSQL válida.")
-        print("Certifique-se de que a definiu no ficheiro .env antes de executar este script.")
-        return
-
-    # Ajusta a URL para o formato do SQLAlchemy
-    if db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-    else:
-        db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
-
+    db_url = get_database_url()
+    if not db_url: return
     try:
         engine = create_engine(db_url)
         with engine.connect() as connection:

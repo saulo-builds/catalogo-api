@@ -36,8 +36,13 @@ def get_database_url():
                 print("Operação cancelada.")
                 return None
             
-            # Garante que a string de conexão use o driver psycopg2
-            return DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1)
+            # Garante que a string de conexão use o driver psycopg2 e sslmode=require
+            final_url = DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1)
+            if "?" not in final_url:
+                final_url += "?sslmode=require"
+            elif "sslmode=" not in final_url:
+                final_url += "&sslmode=require"
+            return final_url
         else:
             print("Opção inválida. Por favor, digite '1' para Local ou '2' para Produção.")
 
@@ -80,8 +85,7 @@ def create_tables():
                     nome VARCHAR(255) NOT NULL,
                     tipo VARCHAR(50) NOT NULL,
                     material VARCHAR(100),
-                    preco_venda DECIMAL(10, 2) NOT NULL,
-                    preco_custo DECIMAL(10, 2)
+                    preco_venda DECIMAL(10, 2) NOT NULL
                 );
                 """))
                 print("Tabela 'produtos' criada ou já existente.")
@@ -93,6 +97,7 @@ def create_tables():
                     cor VARCHAR(50) NOT NULL DEFAULT 'N/A',
                     url_foto VARCHAR(255),
                     quantidade INTEGER NOT NULL DEFAULT 0,
+                    preco_custo DECIMAL(10, 2),
                     disponivel_encomenda BOOLEAN NOT NULL DEFAULT TRUE,
                     UNIQUE(id_produto, cor)
                 );
