@@ -51,17 +51,20 @@ def run_migration():
     try:
         engine = create_engine(db_url)
         with engine.connect() as connection:
-            print("Conexão com o banco de dados do Render estabelecida com sucesso!")
+            print("Conexão com o banco de dados estabelecida com sucesso!")
             
             trans = connection.begin()
             try:
+                db_type = engine.dialect.name
+
                 # 1. Verificar se a coluna já existe para evitar erros ao re-executar
-                check_column_query = text("SELECT 1 FROM information_schema.columns WHERE table_name='usuarios' AND column_name='role'")
+                schema_filter = "table_schema = DATABASE()" if db_type == 'mysql' else "table_schema = 'public'"
+                check_column_query = text(f"SELECT 1 FROM information_schema.columns WHERE {schema_filter} AND table_name='usuarios' AND column_name='role'")
                 column_exists = connection.execute(check_column_query).scalar()
 
                 if column_exists:
                     print("A coluna 'role' já existe na tabela 'usuarios'. Nenhuma ação necessária.")
-                    trans.rollback()
+                    trans.rollback() # Apenas desfaz a transação, sem erro.
                     return
 
                 # 2. Adicionar a coluna 'role'
@@ -74,7 +77,10 @@ def run_migration():
                 
                 # 4. Adicionar a restrição NOT NULL e a restrição CHECK
                 print("A adicionar as restrições NOT NULL e CHECK à coluna 'role'...")
-                connection.execute(text("ALTER TABLE usuarios ALTER COLUMN role SET NOT NULL;"))
+                if db_type == 'postgresql':
+                    connection.execute(text("ALTER TABLE usuarios ALTER COLUMN role SET NOT NULL;"))
+                else: # Sintaxe para MySQL
+                    connection.execute(text("ALTER TABLE usuarios MODIFY COLUMN role VARCHAR(50) NOT NULL;"))
                 connection.execute(text("ALTER TABLE usuarios ADD CONSTRAINT check_role CHECK (role IN ('admin', 'atendente'));"))
 
                 trans.commit()

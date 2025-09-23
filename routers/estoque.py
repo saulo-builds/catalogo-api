@@ -22,6 +22,14 @@ router = APIRouter(
     responses={404: {"description": "Não encontrado"}},
 )
 
+@router.get("/health", status_code=status.HTTP_200_OK, include_in_schema=False)
+def health_check():
+    """
+    Endpoint público para verificar a saúde da API e mantê-la "quente".
+    """
+    return {"status": "ok"}
+
+
 @router.get("/produto/{produto_id}", response_model=List[schemas.EstoqueVariacaoResponse])
 def listar_variacoes_por_produto(produto_id: int, db: Session = Depends(get_db), current_user: dict = Depends(seguranca.get_current_user)):
     try:
