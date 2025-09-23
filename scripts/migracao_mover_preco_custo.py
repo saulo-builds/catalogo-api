@@ -23,7 +23,7 @@ def get_database_url():
             if input("Tem a certeza absoluta que deseja continuar? (s/N): ").lower() != 's':
                 print("Operação cancelada.")
                 return None
-            return DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1).replace("postgresql://", "postgresql+psycopg2://", 1)
+            return DATABASE_URL_ENV.replace("postgres://", "postgresql+psycopg2://", 1)
         else:
             print("Opção inválida. Por favor, digite '1' para Local ou '2' para Produção.")
 
