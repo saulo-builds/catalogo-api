@@ -518,13 +518,7 @@
         }
 
         // --- GESTÃO DE ESTOQUE ---
-        async function mostrarGerenciamentoEstoque(produtoId, nomeProduto) {
-            const modalElement = document.getElementById('estoqueModal');
-            const modal = new bootstrap.Modal(modalElement);
-            document.getElementById('estoque-produto-titulo').innerText = `Produto: ${nomeProduto}`;
-            document.getElementById('estoque-produto-id').value = produtoId;
-            modal.show();
-            
+        async function carregarDadosEstoque(produtoId, nomeProduto) {
             const containerTabela = document.getElementById('tabela-estoque-container');
             mostrarCarregamento('tabela-estoque-container');
 
@@ -533,12 +527,12 @@
                 if (!response || !response.ok) throw new Error('Falha ao carregar variações de estoque.');
                 const variacoes = await response.json();
                 variacoesAtuais = variacoes;
-
+        
                 if (variacoes.length === 0) {
                     containerTabela.innerHTML = '<p class="text-center">Nenhuma variação de estoque encontrada.</p>';
                     return;
                 }
-
+        
                 let tabelaHtml = `<table class="table table-sm table-striped table-hover"><thead><tr><th>ID</th><th>Foto</th><th>Cor</th><th>Qtd.</th><th>Custo Médio</th><th>P/ Enc.</th><th class="text-end">Ações</th></tr></thead><tbody>
                     ${variacoes.map(v => `<tr id="variacao-${v.id}"><td>${v.id}</td><td><img src="${v.url_foto || 'https://placehold.co/60x60/eee/ccc?text=S/Foto'}" alt="${v.cor}" width="40" height="40" class="rounded"></td><td>${v.cor}</td><td>${v.quantidade}</td><td>R$ ${(v.preco_custo || 0).toFixed(2).replace('.',',')}</td><td>${v.disponivel_encomenda ? 'Sim' : 'Não'}</td><td class="text-end">
                         <button class="btn btn-sm btn-success" onclick="abrirModalCompra(${v.id}, ${produtoId}, '${nomeProduto.replace(/'/g, "\\'")}')"><i class="bi bi-plus-circle"></i> Comprar</button>
@@ -551,6 +545,18 @@
                 containerTabela.innerHTML = `<p class="text-danger">Erro: ${error.message}</p>`;
             }
         }
+
+        async function mostrarGerenciamentoEstoque(produtoId, nomeProduto) {
+            const modalElement = document.getElementById('estoqueModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+            document.getElementById('estoque-produto-titulo').innerText = `Produto: ${nomeProduto}`;
+            document.getElementById('estoque-produto-id').value = produtoId;
+            
+            await carregarDadosEstoque(produtoId, nomeProduto);
+            
+            modal.show();
+        }
+
         async function adicionarVariacao(event) {
             event.preventDefault();
             const form = document.getElementById('form-adicionar-variacao');
@@ -570,7 +576,7 @@
                 form.reset();
                 const nomeProduto = document.getElementById('estoque-produto-titulo').innerText.replace('Produto: ', '');
                 mostrarToast('Variação adicionada com sucesso!');
-                mostrarGerenciamentoEstoque(produtoId, nomeProduto);
+                await carregarDadosEstoque(produtoId, nomeProduto);
             } catch (error) { mostrarToast(error.message, 'error'); }
         }
         async function apagarVariacao(variacaoId, produtoId, nomeProduto) {
@@ -582,7 +588,7 @@
                     catch (e) { throw new Error(`Falha ao apagar variação. Status: ${response.status}`); }
                 }
                 mostrarToast('Variação apagada com sucesso!');
-                mostrarGerenciamentoEstoque(produtoId, nomeProduto);
+                await carregarDadosEstoque(produtoId, nomeProduto);
             } catch (error) { mostrarToast(error.message, 'error'); }
         }
         function editarVariacao(variacaoId, produtoId, nomeProduto) {
@@ -619,7 +625,7 @@
                 
                 bootstrap.Modal.getInstance(document.getElementById('editVariacaoModal')).hide();
                 mostrarToast('Variação atualizada com sucesso!');
-                mostrarGerenciamentoEstoque(produtoId, nomeProduto);
+                await carregarDadosEstoque(produtoId, nomeProduto);
             } catch (error) { mostrarToast(error.message, 'error'); }
         }
         function abrirModalCompra(variacaoId, produtoId, nomeProduto) {
@@ -645,7 +651,7 @@
                 if (!response || !response.ok) { const err = await response.json(); throw new Error(err.detail); }
                 bootstrap.Modal.getInstance(document.getElementById('compraModal')).hide();
                 mostrarToast('Compra registrada com sucesso!');
-                mostrarGerenciamentoEstoque(produtoId, nomeProduto);
+                await carregarDadosEstoque(produtoId, nomeProduto);
             } catch (e) { mostrarToast(e.message, 'error'); }
         }
 
