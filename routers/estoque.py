@@ -1,6 +1,6 @@
 # routers/estoque.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -22,12 +22,19 @@ router = APIRouter(
     responses={404: {"description": "Não encontrado"}},
 )
 
-@router.get("/health", status_code=status.HTTP_200_OK, include_in_schema=False)
-def health_check():
+@router.get("/health", status_code=status.HTTP_200_OK, include_in_schema=False, summary="Health Check (GET)")
+def health_check_get():
     """
     Endpoint público para verificar a saúde da API e mantê-la "quente".
     """
     return {"status": "ok"}
+
+@router.head("/health", status_code=status.HTTP_200_OK, include_in_schema=False, summary="Health Check (HEAD)")
+async def health_check_head():
+    """
+    Endpoint público para health checks que usam o método HEAD (como UptimeRobot).
+    """
+    return Response()
 
 
 @router.get("/produto/{produto_id}", response_model=List[schemas.EstoqueVariacaoResponse])
