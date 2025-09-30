@@ -21,7 +21,7 @@ if SECRET_KEY is None:
     raise ValueError("A variável de ambiente SECRET_KEY não foi definida.")
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30 # O token será válido por 30 minutos
+ACCESS_TOKEN_EXPIRE_MINUTES = 480 # 8 horas
 
 # --- Hashing de Senhas ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
